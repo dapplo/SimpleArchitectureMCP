@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DevToolsMcp.AppHost/DevToolsMcp.AppHost.csproj" />
+    <Project Path="src/DevToolsMcp.Server/DevToolsMcp.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DevToolsMcp.Tests/DevToolsMcp.Tests.csproj" />
+  </Folder>
+</Solution>

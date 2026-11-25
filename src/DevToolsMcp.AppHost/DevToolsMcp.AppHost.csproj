@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Aspire 17: plain Microsoft.NET.Sdk + Aspire.Hosting.AppHost (Aspire.AppHost.Sdk is obsolete, ASPIRE012).
+       Projects are added by path with AddDotnetProject; dashboard/DCP come from the Aspire CLI bundle (`aspire run`). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UserSecretsId>devtools-mcp-apphost-2b7d4c90</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Include="Aspire.Hosting.Dotnet" />
+  </ItemGroup>
+
+</Project>
