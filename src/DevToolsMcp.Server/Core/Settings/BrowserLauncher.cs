@@ -4,7 +4,10 @@ namespace DevToolsMcp.Server.Core.Settings;
 
 internal static class BrowserLauncher
 {
-    public static void TryOpen(string url, ILogger logger)
+    public static void TryOpen(string url, ILogger logger) =>
+        TryOpen(url, message => logger.LogInformation("{Message}", message));
+
+    public static void TryOpen(string url, Action<string> reportFailure)
     {
         try
         {
@@ -17,7 +20,7 @@ internal static class BrowserLauncher
         }
         catch (Exception ex)
         {
-            logger.LogInformation("Could not open a browser ({Reason}). Open {Url} manually.", ex.Message, url);
+            reportFailure($"Could not open a browser ({ex.Message}). Open {url} manually.");
         }
     }
 }

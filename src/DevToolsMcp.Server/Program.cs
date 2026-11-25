@@ -11,6 +11,13 @@ var builder = WebApplication.CreateSlimBuilder(args);
 
 var settingsFile = SettingsStore.AddTo(builder.Configuration); // per-user settings written by the settings page
 var port = builder.ConfigureLocalKestrel();                     // 127.0.0.1 / ::1 only, port 5180 by default
+
+// Started a second time (e.g. double-clicked again)? Point at the running instance instead of crashing on bind.
+if (!PortGuard.IsFree(port, string.Equals(builder.Configuration["DevToolsMcp:AllowRemote"], "true", StringComparison.OrdinalIgnoreCase)))
+{
+    return await PortGuard.ReportInUseAsync(port, builder.Configuration);
+}
+
 builder.AddDevToolsTelemetry();                                  // OTLP traces/metrics/logs (Aspire dashboard)
 
 // 1) Compose the AOT-safe JSON contexts of all modules.
@@ -62,4 +69,5 @@ app.Lifetime.ApplicationStarted.Register(() =>
     }
 });
 
-app.Run();
+await app.RunAsync();
+return 0;
