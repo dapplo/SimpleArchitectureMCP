@@ -12,6 +12,8 @@
     <!-- Aspire -->
     <PackageVersion Include="Aspire.Hosting.AppHost" Version="17.0.0" />
     <PackageVersion Include="Aspire.Hosting.Dotnet" Version="17.0.0" />
+    <!-- Benchmarks -->
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- Tests -->
     <PackageVersion Include="xunit.v3" Version="4.0.3" />
   </ItemGroup>

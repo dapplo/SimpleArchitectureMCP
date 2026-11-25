@@ -52,10 +52,13 @@ public class GitHubServiceTests
     {
         var (svc, http) = Create();
         http.On("GET", "/repos/o/r/issues/5", Issue);
-        http.On("GET", "/repos/o/r/issues/5/comments?per_page=100&page=1", """
+        // 3 comments, 2 wanted: pages of 2, so page 2 holds only the last one and page 1 is read as well.
+        http.On("GET", "/repos/o/r/issues/5/comments?per_page=2&page=1", """
             [{"id":11,"user":{"login":"a"},"body":"one","created_at":"2026-01-03T00:00:00Z"},
-             {"id":12,"user":{"login":"b"},"body":"two","created_at":"2026-01-04T00:00:00Z"},
-             {"id":13,"user":{"login":"c"},"body":" three ","created_at":"2026-01-05T00:00:00Z"}]
+             {"id":12,"user":{"login":"b"},"body":"two","created_at":"2026-01-04T00:00:00Z"}]
+            """);
+        http.On("GET", "/repos/o/r/issues/5/comments?per_page=2&page=2", """
+            [{"id":13,"user":{"login":"c"},"body":" three ","created_at":"2026-01-05T00:00:00Z"}]
             """);
 
         var result = await svc.GetIssueAsync(null, 5, 2, Ct);
@@ -102,9 +105,10 @@ public class GitHubServiceTests
     {
         var (svc, http) = Create();
         http.On("GET", "/repos/o/r/issues/5", Issue.Replace("\"comments\":3", "\"comments\":101"));
-        http.On("GET", "/repos/o/r/issues/5/comments?per_page=100&page=2", """[{"id":200,"body":"last"}]""");
-        http.On("GET", "/repos/o/r/issues/5/comments?per_page=100&page=1",
-            "[" + string.Join(',', Enumerable.Range(100, 100).Select(i => $$"""{"id":{{i}},"body":"c"}""")) + "]");
+        // 101 comments in pages of 3: page 34 holds #100 only, page 33 holds #97-#99.
+        http.On("GET", "/repos/o/r/issues/5/comments?per_page=3&page=34", """[{"id":200,"body":"last"}]""");
+        http.On("GET", "/repos/o/r/issues/5/comments?per_page=3&page=33",
+            "[" + string.Join(',', Enumerable.Range(197, 3).Select(i => $$"""{"id":{{i}},"body":"c"}""")) + "]");
 
         var result = await svc.GetIssueAsync(null, 5, 3, Ct);
 
@@ -112,6 +116,23 @@ public class GitHubServiceTests
         Assert.Contains("[198]", result);
         Assert.Contains("[200]", result);
         Assert.DoesNotContain("[197]", result);
+        Assert.Equal(3, http.Requests.Count); // issue + two small comment pages, not 101 comments
+    }
+
+    [Fact]
+    public async Task Get_issue_reads_one_page_when_the_last_page_is_full()
+    {
+        var (svc, http) = Create();
+        http.On("GET", "/repos/o/r/issues/5", Issue.Replace("\"comments\":3", "\"comments\":40"));
+        http.On("GET", "/repos/o/r/issues/5/comments?per_page=20&page=2",
+            "[" + string.Join(',', Enumerable.Range(21, 20).Select(i => $$"""{"id":{{i}},"body":"c"}""")) + "]");
+
+        var result = await svc.GetIssueAsync(null, 5, 20, Ct);
+
+        Assert.Contains("## Comments (last 20 of 40)", result);
+        Assert.Contains("[21]", result);
+        Assert.Contains("[40]", result);
+        Assert.Equal(2, http.Requests.Count);
     }
 
     [Fact]

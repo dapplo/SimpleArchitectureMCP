@@ -3,6 +3,9 @@
     <Project Path="src/DevToolsMcp.AppHost/DevToolsMcp.AppHost.csproj" />
     <Project Path="src/DevToolsMcp.Server/DevToolsMcp.Server.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/DevToolsMcp.Benchmarks/DevToolsMcp.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/DevToolsMcp.Tests/DevToolsMcp.Tests.csproj" />
   </Folder>

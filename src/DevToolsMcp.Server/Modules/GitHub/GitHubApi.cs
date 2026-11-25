@@ -35,8 +35,8 @@ public sealed class GitHubApi(IHttpClientFactory httpClientFactory, GitHubOption
     public Task<GhIssue> GetIssueAsync(string repo, int number, CancellationToken ct) =>
         SendAsync(HttpMethod.Get, $"repos/{repo}/issues/{number}", null, GitHubJsonContext.Default.GhIssue, ct)!;
 
-    public Task<List<GhComment>> GetCommentsAsync(string repo, int number, int page, CancellationToken ct) =>
-        SendAsync(HttpMethod.Get, $"repos/{repo}/issues/{number}/comments?per_page=100&page={page}",
+    public Task<List<GhComment>> GetCommentsAsync(string repo, int number, int perPage, int page, CancellationToken ct) =>
+        SendAsync(HttpMethod.Get, $"repos/{repo}/issues/{number}/comments?per_page={perPage}&page={page}",
             null, GitHubJsonContext.Default.ListGhComment, ct)!;
 
     public Task<List<GhLabel>> GetLabelsAsync(string repo, CancellationToken ct) =>
@@ -110,13 +110,13 @@ public sealed class GitHubApi(IHttpClientFactory httpClientFactory, GitHubOption
                 writer.WriteEndObject();
             }
 
-            request.Content = new ByteArrayContent(buffer.ToArray());
+            request.Content = new ByteArrayContent(buffer.GetBuffer(), 0, (int)buffer.Length); // no copy
             request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
         }
 
         var client = httpClientFactory.CreateClient(GitHubModule.HttpClientName);
         client.BaseAddress = _baseAddress; // per adapter, so saving new settings takes effect without a restart
-        using var response = await client.SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
         {
