@@ -7,8 +7,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 Provider[] providers =
 [
     Provider.Create(builder, "confluence", "Confluence", withDeploymentType: true),
-    Provider.Create(builder, "jira", "Jira", withDeploymentType: true),
-    // Provider.Create(builder, "github", "GitHub"),
+    Provider.Create(builder, "jira", "Jira", withDeploymentType: true, optional: true),
+    Provider.Create(builder, "github", "GitHub", withEmail: false, optional: true),
 ];
 
 // Prefer the published Native AOT single-file binary (sub-50 ms start); fall back to the project during development.
@@ -33,16 +33,21 @@ builder.Build().Run();
 internal sealed record Provider(
     string Section,
     IResourceBuilder<ParameterResource> Url,
-    IResourceBuilder<ParameterResource> Email,
+    IResourceBuilder<ParameterResource>? Email,
     IResourceBuilder<ParameterResource> Token,
     IResourceBuilder<ParameterResource>? DeploymentType)
 {
-    public static Provider Create(IDistributedApplicationBuilder builder, string prefix, string section, bool withDeploymentType = false) => new(
+    public static Provider Create(IDistributedApplicationBuilder builder, string prefix, string section, bool withDeploymentType = false,
+        bool withEmail = true, bool optional = false) => new(
         section,
-        builder.AddParameter($"{prefix}-url").WithDescription($"{section} base URL"),
-        builder.AddParameter($"{prefix}-email").AsOptional().WithDescription($"{section} account email (Cloud only)"),
-        builder.AddParameter($"{prefix}-token", secret: true).WithDescription($"{section} API token / personal access token"),
+        Optional(builder.AddParameter($"{prefix}-url").WithDescription($"{section} base URL"), optional),
+        withEmail ? builder.AddParameter($"{prefix}-email").AsOptional().WithDescription($"{section} account email (Cloud only)") : null,
+        Optional(builder.AddParameter($"{prefix}-token", secret: true).WithDescription($"{section} API token / personal access token"), optional),
         withDeploymentType ? builder.AddParameter($"{prefix}-deployment", "Auto").WithDescription("Auto, Cloud or DataCenter") : null);
+
+    // Optional providers don't block startup; unset values leave the variable unset, so the settings page still works.
+    private static IResourceBuilder<ParameterResource> Optional(IResourceBuilder<ParameterResource> p, bool optional) =>
+        optional ? p.AsOptional() : p;
 }
 
 internal static class McpServerResourceExtensions
@@ -62,8 +67,12 @@ internal static class McpServerResourceExtensions
         {
             resource
                 .WithEnvironment($"{p.Section}__BaseUrl", p.Url)
-                .WithEnvironment($"{p.Section}__Email", p.Email)
                 .WithEnvironment($"{p.Section}__ApiToken", p.Token);
+            if (p.Email is not null)
+            {
+                resource.WithEnvironment($"{p.Section}__Email", p.Email);
+            }
+
             if (p.DeploymentType is not null)
             {
                 resource.WithEnvironment($"{p.Section}__DeploymentType", p.DeploymentType);
