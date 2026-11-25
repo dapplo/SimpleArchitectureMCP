@@ -64,12 +64,11 @@ jobs:
         run: |
           mkdir -p dist
           cd artifacts/publish/${{ matrix.rid }}
-          files=""
-          for f in devtools-mcp devtools-mcp.exe appsettings.json; do [ -f "$f" ] && files="$files $f"; done
+          # Pick names by OS: Git Bash on Windows resolves "devtools-mcp" to the .exe, so probing files is unreliable.
           if [ "${{ runner.os }}" = "Windows" ]; then
-            7z a "$GITHUB_WORKSPACE/dist/devtools-mcp-${{ matrix.rid }}.zip" $files
+            7z a "$GITHUB_WORKSPACE/dist/devtools-mcp-${{ matrix.rid }}.zip" devtools-mcp.exe appsettings.json
           else
-            tar -czf "$GITHUB_WORKSPACE/dist/devtools-mcp-${{ matrix.rid }}.tar.gz" $files
+            tar -czf "$GITHUB_WORKSPACE/dist/devtools-mcp-${{ matrix.rid }}.tar.gz" devtools-mcp appsettings.json
           fi
 
       - uses: actions/upload-artifact@v5
