@@ -20,12 +20,13 @@ public sealed class SettingsStore(string filePath, IConfigurationRoot configurat
         "devtools-mcp", "settings.json");
 
     /// <summary>Adds the settings file as a configuration source just before the environment variable sources.</summary>
-    public static string AddTo(ConfigurationManager configuration)
+    /// <param name="watch">Reload when another process (e.g. a second devtools-mcp instance) changes the file.</param>
+    public static string AddTo(ConfigurationManager configuration, bool watch = false)
     {
         var path = Path.GetFullPath(configuration["DevToolsMcp:SettingsFile"] is { Length: > 0 } p ? p : DefaultPath());
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-        var source = new JsonConfigurationSource { Path = path, Optional = true, ReloadOnChange = false };
+        var source = new JsonConfigurationSource { Path = path, Optional = true, ReloadOnChange = watch };
         source.ResolveFileProvider();
 
         // Right after the last JSON file source (appsettings[.Environment].json), i.e. before the

@@ -59,6 +59,9 @@ jobs:
           curl -fsS http://127.0.0.1:5180/health
           # A second start must detect the running instance and exit cleanly (not crash on the taken port).
           DevToolsMcp__OpenBrowser=false "$bin"
+          # --stdio answers MCP on stdout (logs on stderr) and keeps working while another instance holds the port.
+          init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}'
+          { echo "$init"; sleep 3; } | DevToolsMcp__OpenBrowser=false "$bin" --stdio 2>/dev/null | grep -m1 '"serverInfo":{"name":"devtools-mcp"'
           kill $pid
 
       - name: Package

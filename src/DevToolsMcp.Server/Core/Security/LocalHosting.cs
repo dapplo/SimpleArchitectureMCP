@@ -12,17 +12,30 @@ public static class LocalHosting
     /// Binds Kestrel to loopback only (127.0.0.1 and ::1). The port comes from <c>DevToolsMcp:Port</c>,
     /// then <c>PORT</c> (set by Aspire), then 5180. Binding all interfaces requires <c>DevToolsMcp:AllowRemote=true</c>.
     /// </summary>
-    public static int ConfigureLocalKestrel(this WebApplicationBuilder builder)
+    public static int ConfigureLocalKestrel(this WebApplicationBuilder builder) =>
+        builder.ConfigureLocalKestrel(ResolvePort(builder.Configuration));
+
+    /// <summary>The configured port: <c>DevToolsMcp:Port</c>, then <c>PORT</c>, then 5180.</summary>
+    public static int ResolvePort(IConfiguration config) =>
+        ParsePort(config["DevToolsMcp:Port"]) ?? ParsePort(config["PORT"]) ?? DefaultPort;
+
+    public static bool AllowRemote(IConfiguration config) =>
+        string.Equals(config["DevToolsMcp:AllowRemote"], "true", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Binds Kestrel to <paramref name="port"/>; 0 picks a free loopback port.</summary>
+    public static int ConfigureLocalKestrel(this WebApplicationBuilder builder, int port)
     {
-        var config = builder.Configuration;
-        var port = ParsePort(config["DevToolsMcp:Port"]) ?? ParsePort(config["PORT"]) ?? DefaultPort;
-        var allowRemote = string.Equals(config["DevToolsMcp:AllowRemote"], "true", StringComparison.OrdinalIgnoreCase);
+        var allowRemote = AllowRemote(builder.Configuration);
 
         builder.WebHost.ConfigureKestrel(k =>
         {
             if (allowRemote)
             {
                 k.Listen(IPAddress.Any, port);
+            }
+            else if (port == 0)
+            {
+                k.Listen(IPAddress.Loopback, 0); // ListenLocalhost does not support dynamic ports
             }
             else
             {
