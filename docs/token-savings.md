@@ -132,6 +132,20 @@ Where the savings come from:
 
 Basic issue work only: search, read, create, edit, close/reopen, comment, labels, assignees and milestones, all with your token's own permissions. There are no repository, organization, team, webhook or admin tools, so none of their schemas are paid for. Attachments are not supported, because GitHub has no public API for uploading issue attachments.
 
+## Compared with no tool at all
+
+> **Not measured.** This is a reasoned estimate. The cost depends on how much the agent has to experiment, so real numbers would need agent sessions run both ways.
+
+An agent with only a shell can call the REST APIs itself with `curl` (or `gh` for GitHub). The tool list then costs nothing extra, because the shell tool is already loaded. Each task costs more, though:
+
+* **The agent writes every call itself:** authentication headers, the right endpoint, query escaping, and usually a `jq` filter to shrink the JSON. These are output tokens, the slowest and most expensive kind, and they are paid again in every new conversation.
+* **First attempts tend to read raw responses** (183 KB for a 20-hit GitHub search, 234 KB for a Jira one, see above) before the agent learns which fields to filter.
+* **Mistakes cost whole round trips:** a wrong endpoint or header, pagination, Jira transition ids, Confluence version numbers and conflicts.
+* **Some jobs are hard to do well from a shell at all:** converting Confluence storage XHTML to Markdown and back without losing macros, appending to a page without sending it twice, or resolving a Jira user to an account id.
+* **The token has to be reachable from the shell,** often as plain text in an environment variable or in the transcript.
+
+The gap is smallest for simple GitHub reads with the `gh` CLI, whose `gh issue list` and `gh issue view` output is already compact. It is largest for Confluence, which has no comparable CLI.
+
 ## Trade-offs
 
 * **Narrower scope.** If you need pull request reviews, Actions, code search or project boards, the official servers do more. You can run both and enable only what you need in each.
