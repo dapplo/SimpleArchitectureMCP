@@ -25,7 +25,10 @@ internal sealed class FakeHttp : HttpMessageHandler, IHttpClientFactory
     {
         var path = request.RequestUri!.PathAndQuery;
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-        Requests.Add((request.Method, path, body));
+        lock (Requests)
+        {
+            Requests.Add((request.Method, path, body)); // requests may run in parallel
+        }
 
         if (!_routes.TryGetValue($"{request.Method.Method} {path}", out var route))
         {

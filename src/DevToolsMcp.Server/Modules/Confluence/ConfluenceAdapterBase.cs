@@ -69,7 +69,7 @@ public abstract partial class ConfluenceAdapterBase(IHttpClientFactory httpClien
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Authorization = authorization;
-        using var response = await CreateClient().SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await CreateClient().SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         return await ReadAsync(response, typeInfo, ct).ConfigureAwait(false);
     }
 
@@ -81,7 +81,7 @@ public abstract partial class ConfluenceAdapterBase(IHttpClientFactory httpClien
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
         using var request = new HttpRequestMessage(method, path) { Content = content };
         request.Headers.Authorization = authorization;
-        using var response = await CreateClient().SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await CreateClient().SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         return await ReadAsync(response, responseInfo, ct).ConfigureAwait(false);
     }
 

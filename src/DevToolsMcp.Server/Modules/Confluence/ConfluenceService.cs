@@ -56,8 +56,9 @@ public sealed partial class ConfluenceService
         var storage = IsStorage(format);
         var page = await Api.GetPageAsync(ValidateId(pageId), includeBody: true, ct).ConfigureAwait(false);
         var body = page.StorageBody ?? string.Empty;
-        var content = storage ? body : ConfluenceMarkupConverter.ToMarkdown(body);
-        return $"---\nid: {page.Id}\ntitle: {page.Title}\nversion: {page.Version}\n---\n{content}";
+        var header = $"---\nid: {page.Id}\ntitle: {page.Title}\nversion: {page.Version}\n---\n";
+        // The Markdown is appended to the header directly: large pages are not copied once more.
+        return storage ? header + body : ConfluenceMarkupConverter.ToMarkdown(body, new StringBuilder(header)).ToString();
     }
 
     public async Task<string> GetChildrenAsync(string pageId, int limit, CancellationToken ct)

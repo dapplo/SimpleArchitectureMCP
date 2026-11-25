@@ -25,7 +25,10 @@ internal sealed class JiraFakeHttp : HttpMessageHandler, IHttpClientFactory
         var path = request.RequestUri!.PathAndQuery;
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
         var headers = request.Headers.ToDictionary(h => h.Key, h => string.Join(",", h.Value), StringComparer.OrdinalIgnoreCase);
-        Requests.Add(new Recorded(request.Method, path, body, request.Content?.Headers.ContentType?.MediaType, headers));
+        lock (Requests)
+        {
+            Requests.Add(new Recorded(request.Method, path, body, request.Content?.Headers.ContentType?.MediaType, headers)); // issue + comments run in parallel
+        }
 
         if (!_routes.TryGetValue($"{request.Method.Method} {path}", out var route))
         {

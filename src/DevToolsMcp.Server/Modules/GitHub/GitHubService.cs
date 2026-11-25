@@ -290,16 +290,18 @@ public sealed partial class GitHubService
             : string.Join('\n', labels.Select(l => string.IsNullOrWhiteSpace(l.Description) ? l.Name : $"{l.Name} | {l.Description}"));
     }
 
-    /// <summary>The comments endpoint is oldest-first; read the last page(s) to get the most recent ones.</summary>
+    /// <summary>
+    /// The comments endpoint is oldest-first; read the last page(s) to get the most recent ones. Pages are sized to
+    /// <paramref name="take"/>, so at most 2 × take comment bodies are downloaded (both pages in parallel).
+    /// </summary>
     private static async Task<List<GhComment>> GetLastCommentsAsync(GitHubApi api, string repo, int number, int total, int take, CancellationToken ct)
     {
-        var page = Math.Max(1, (total + 99) / 100);
-        var list = await api.GetCommentsAsync(repo, number, page, ct).ConfigureAwait(false);
-        if (list.Count < take && page > 1)
-        {
-            var previous = await api.GetCommentsAsync(repo, number, page - 1, ct).ConfigureAwait(false);
-            list = [.. previous, .. list];
-        }
+        var last = Math.Max(1, (total + take - 1) / take);
+        var lastTask = api.GetCommentsAsync(repo, number, take, last, ct);
+        var partial = total % take != 0 && last > 1; // the last page holds fewer than take comments
+        var list = partial
+            ? [.. await api.GetCommentsAsync(repo, number, take, last - 1, ct).ConfigureAwait(false), .. await lastTask.ConfigureAwait(false)]
+            : await lastTask.ConfigureAwait(false);
 
         return list.Count <= take ? list : list.GetRange(list.Count - take, take);
     }

@@ -126,7 +126,7 @@ public abstract class JiraAdapterBase(IHttpClientFactory httpClientFactory, Uri 
         request.Headers.Authorization = authorization;
         var client = httpClientFactory.CreateClient(JiraModule.HttpClientName);
         client.BaseAddress = SiteBase;
-        return client.SendAsync(request, ct);
+        return client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
     }
 
     private static async Task<T> ReadAsync<T>(HttpResponseMessage response, JsonTypeInfo<T> typeInfo, CancellationToken ct)

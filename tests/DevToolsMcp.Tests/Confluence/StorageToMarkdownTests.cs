@@ -95,4 +95,22 @@ public class StorageToMarkdownTests
     {
         Assert.Equal("broken text", Md("<p>broken <b>text</p>"));
     }
+
+    [Fact]
+    public void Nested_containers_keep_their_separators()
+    {
+        // Containers are flattened only where their children are joined by blank lines anyway.
+        Assert.Equal("a\n\n- x\n\nb\n\nc", Md("<div><p>a</p><div><ul><li>x</li></ul><p>b</p></div></div><p>c</p>"));
+        Assert.Equal("- a\n\n  - b", Md("<ul><li><div><p>a</p><ul><li>b</li></ul></div></li></ul>"));
+        Assert.Equal("| x<br><br>y |\n| --- |", Md("<table><tr><td><div><p>x</p><p>y</p></div></td></tr></table>"));
+        Assert.Equal("> q1\n>\n> q2", Md("<blockquote><div><p>q1</p><p>q2</p></div></blockquote>"));
+    }
+
+    [Fact]
+    public void Appends_to_an_existing_builder_and_trims_only_its_own_part()
+    {
+        var sb = new System.Text.StringBuilder("head ");
+        ConfluenceMarkupConverter.ToMarkdown("<ac:task-list><ac:task><ac:task-status>incomplete</ac:task-status><ac:task-body></ac:task-body></ac:task></ac:task-list>", sb);
+        Assert.Equal("head - [ ]", sb.ToString());
+    }
 }

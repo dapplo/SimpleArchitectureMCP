@@ -14,11 +14,18 @@ public static partial class ConfluenceMarkupConverter
     private const string HardBreak = "\\\n";
 
     /// <summary>Converts Confluence Storage Format XHTML to compact Markdown.</summary>
-    public static string ToMarkdown(string storage)
+    public static string ToMarkdown(string storage) =>
+        string.IsNullOrWhiteSpace(storage) ? string.Empty : ToMarkdown(storage, new StringBuilder()).ToString();
+
+    /// <summary>
+    /// Appends the Markdown for <paramref name="storage"/> to <paramref name="output"/>, so callers that add a header
+    /// do not copy a large page body once more.
+    /// </summary>
+    public static StringBuilder ToMarkdown(string storage, StringBuilder output)
     {
         if (string.IsNullOrWhiteSpace(storage))
         {
-            return string.Empty;
+            return output;
         }
 
         XElement root;
@@ -29,15 +36,18 @@ public static partial class ConfluenceMarkupConverter
         catch (XmlException)
         {
             // Malformed storage: degrade to plain text rather than failing the tool call.
-            return Whitespace().Replace(WebUtility.HtmlDecode(Tags().Replace(storage, " ")), " ").Trim();
+            return output.Append(Whitespace().Replace(WebUtility.HtmlDecode(Tags().Replace(storage, " ")), " ").Trim());
         }
 
-        return Join(RenderBlockParts(root.Nodes()), loose: true).Trim();
+        var start = output.Length;
+        Join(output, RenderBlockParts(root.Nodes()), loose: true);
+        return TrimFrom(output, start);
     }
 
     internal static XElement ParseStorage(string storage)
     {
         // Storage format uses undeclared ac:/ri: prefixes and HTML named entities; make it well-formed XML.
+        // (Regex.Replace returns the same instance when the page has no named entities.)
         var xml = Entity().Replace(storage, static m =>
         {
             var name = m.Groups[1].Value;
@@ -61,17 +71,52 @@ public static partial class ConfluenceMarkupConverter
             return sb.ToString();
         });
 
-        var wrapped = $"<root xmlns:ac=\"{Ac.NamespaceName}\" xmlns:ri=\"{Ri.NamespaceName}\" xmlns:at=\"http://atlassian.com/template\">{xml}</root>";
-        var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-        using var reader = XmlReader.Create(new StringReader(wrapped), settings);
-        return XElement.Load(reader, LoadOptions.PreserveWhitespace);
+        // Parse as a fragment with the prefixes predeclared, instead of wrapping the (possibly large) body in a root
+        // element string.
+        var names = new NameTable();
+        var namespaces = new XmlNamespaceManager(names);
+        namespaces.AddNamespace("ac", Ac.NamespaceName);
+        namespaces.AddNamespace("ri", Ri.NamespaceName);
+        namespaces.AddNamespace("at", "http://atlassian.com/template");
+        var context = new XmlParserContext(names, namespaces, null, XmlSpace.None);
+        var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, ConformanceLevel = ConformanceLevel.Fragment };
+
+        var root = new XElement("root");
+        using var reader = XmlReader.Create(new StringReader(xml), settings, context);
+        reader.Read();
+        while (!reader.EOF)
+        {
+            root.Add(XNode.ReadFrom(reader)); // advances the reader past the node
+        }
+
+        return root;
+    }
+
+    /// <summary>Removes leading and trailing whitespace of what was appended after <paramref name="start"/>.</summary>
+    private static StringBuilder TrimFrom(StringBuilder sb, int start)
+    {
+        var end = sb.Length;
+        while (end > start && char.IsWhiteSpace(sb[end - 1]))
+        {
+            end--;
+        }
+
+        sb.Length = end;
+        var lead = start;
+        while (lead < end && char.IsWhiteSpace(sb[lead]))
+        {
+            lead++;
+        }
+
+        return lead > start ? sb.Remove(start, lead - start) : sb;
     }
 
     private readonly record struct Part(string Text, bool IsList);
 
-    private static string Join(List<Part> parts, bool loose)
+    private static string Join(List<Part> parts, bool loose) => Join(new StringBuilder(), parts, loose).ToString();
+
+    private static StringBuilder Join(StringBuilder sb, List<Part> parts, bool loose)
     {
-        var sb = new StringBuilder();
         for (var i = 0; i < parts.Count; i++)
         {
             if (i > 0)
@@ -83,12 +128,17 @@ public static partial class ConfluenceMarkupConverter
             sb.Append(parts[i].Text);
         }
 
-        return sb.ToString();
+        return sb;
     }
 
-    private static List<Part> RenderBlockParts(IEnumerable<XNode> nodes)
+    /// <param name="flatten">
+    /// The caller joins the parts with blank lines (<c>loose</c>). Plain containers (layouts, divs, ...) then add their
+    /// children as separate parts instead of one pre-joined string, which gives the same text without copying a large
+    /// page once per nesting level.
+    /// </param>
+    private static List<Part> RenderBlockParts(IEnumerable<XNode> nodes, bool flatten = true, List<Part>? parts = null)
     {
-        var parts = new List<Part>();
+        parts ??= [];
         var inline = new StringBuilder();
 
         void FlushInline()
@@ -106,6 +156,12 @@ public static partial class ConfluenceMarkupConverter
             if (node is XElement e && IsBlock(e))
             {
                 FlushInline();
+                if (flatten && IsContainer(e))
+                {
+                    RenderBlockParts(e.Nodes(), flatten: true, parts);
+                    continue;
+                }
+
                 var block = RenderBlock(e);
                 if (block.Length > 0)
                 {
@@ -121,6 +177,17 @@ public static partial class ConfluenceMarkupConverter
         FlushInline();
         return parts;
     }
+
+    /// <summary>Block elements rendered as nothing but their children joined by blank lines (see <see cref="RenderBlock"/>).</summary>
+    private static bool IsContainer(XElement e) =>
+        e.Name.Namespace == Ac
+            ? e.Name.LocalName is "layout" or "layout-section" or "layout-cell"
+            : e.Name.LocalName switch
+            {
+                "p" => e.Elements().Any(IsBlock),
+                "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or "ul" or "ol" or "table" or "pre" or "blockquote" or "hr" => false,
+                _ => true, // div, section, article, header, footer, dl
+            };
 
     private static bool IsBlock(XElement e)
     {
@@ -189,7 +256,7 @@ public static partial class ConfluenceMarkupConverter
             }
 
             var marker = ordered ? $"{n++}. " : "- ";
-            AppendItem(sb, marker, Join(RenderBlockParts(li.Nodes()), loose: false));
+            AppendItem(sb, marker, Join(RenderBlockParts(li.Nodes(), flatten: false), loose: false));
         }
 
         return sb.ToString();
@@ -207,7 +274,7 @@ public static partial class ConfluenceMarkupConverter
 
             var done = string.Equals((string?)task.Element(Ac + "task-status"), "complete", StringComparison.OrdinalIgnoreCase);
             var body = task.Element(Ac + "task-body");
-            var content = body is null ? string.Empty : Join(RenderBlockParts(body.Nodes()), loose: false);
+            var content = body is null ? string.Empty : Join(RenderBlockParts(body.Nodes(), flatten: false), loose: false);
             AppendItem(sb, done ? "- [x] " : "- [ ] ", content);
         }
 
@@ -276,7 +343,7 @@ public static partial class ConfluenceMarkupConverter
 
     private static string RenderCell(XElement cell)
     {
-        var text = string.Join("<br>", RenderBlockParts(cell.Nodes()).Select(p => p.Text));
+        var text = string.Join("<br>", RenderBlockParts(cell.Nodes(), flatten: false).Select(p => p.Text));
         return text.Replace(HardBreak, "<br>").Replace("\n", "<br>").Replace("|", "\\|");
     }
 
