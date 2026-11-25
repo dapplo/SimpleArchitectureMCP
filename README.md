@@ -2,7 +2,7 @@
 
 A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io) server for developer tools, built to keep LLM token usage low.
 
-* **.NET 11**, `WebApplication.CreateSlimBuilder`, official `ModelContextProtocol.AspNetCore` SDK over **Streamable HTTP** (`/mcp`)
+* **.NET 11**, `WebApplication.CreateSlimBuilder`, official `ModelContextProtocol.AspNetCore` SDK over **Streamable HTTP** (`/mcp`), or **stdio** with `--stdio` so clients can start it themselves
 * Published as a **single-file, self-contained Native AOT** executable (~24 MB, about 60–80 ms from launch to healthy)
 * **Double-click to run**: a built-in settings page (`http://localhost:5180/`) opens on first start; paste your URL and token and the tools switch on without a restart
 * Optional **Aspire 17** AppHost for development, with OpenTelemetry traces, metrics and logs in the Aspire dashboard
@@ -11,7 +11,7 @@ A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io
 
 ## Documentation
 
-* [Connect your client](docs/clients.md): VS Code / GitHub Copilot, Copilot CLI, Claude Code, Claude Desktop, Cursor, Windsurf, JetBrains AI Assistant, Codex CLI, and stdio-only clients; with and without an API key
+* [Connect your client](docs/clients.md): VS Code / GitHub Copilot, Copilot CLI, Claude Code, Claude Desktop, Cursor, Windsurf, JetBrains AI Assistant and Codex CLI, over HTTP or stdio, with and without an API key
 * [What you can do with it](docs/examples.md): example prompts and cross-tool workflows
 * [Aspire](docs/aspire.md): dashboard, telemetry, parameters, and the Aspire MCP server for coding agents
 * [Token savings](docs/token-savings.md): measurements and why they matter
@@ -37,7 +37,7 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 1. Download the archive for your OS from the latest [release](../../releases) and extract it.
 2. Double-click `devtools-mcp` (`devtools-mcp.exe` on Windows). A console window shows the server log.
 3. On first start the settings page opens in your browser (`http://localhost:5180/`). Fill in the modules you use (Confluence and Jira: base URL, email for Cloud, API token; GitHub: a personal access token, plus the URL only for GitHub Enterprise), then **Save**. The page tests the connection, and that module's tools become available immediately.
-4. Point your MCP client at `http://localhost:5180/mcp`. [docs/clients.md](docs/clients.md) has the setup for VS Code / GitHub Copilot, Claude Code, Claude Desktop, Cursor, Windsurf, JetBrains and Codex. If the client was already connected, reload its MCP server so it fetches the new tool list.
+4. Point your MCP client at `http://localhost:5180/mcp`, or let the client start `devtools-mcp --stdio` itself. [docs/clients.md](docs/clients.md) has the setup for VS Code / GitHub Copilot, Claude Code, Claude Desktop, Cursor, Windsurf, JetBrains and Codex. If the client was already connected, reload its MCP server so it fetches the new tool list.
 5. Ask away: [docs/examples.md](docs/examples.md) has example prompts and workflows across Confluence, Jira and GitHub.
 
 Settings are stored per user in `%APPDATA%\devtools-mcp\settings.json` (Windows) or `~/.config/devtools-mcp/settings.json` (Linux/macOS), readable only by you on Linux/macOS. Environment variables and `appsettings.json` work too; environment variables win over the settings page.
@@ -181,6 +181,7 @@ Jira configuration mirrors Confluence: `Jira:BaseUrl`, `Jira:Email` (Cloud only)
 | `Confluence:DeploymentType` (`Confluence__DeploymentType`) | `Auto` \| `Cloud` \| `DataCenter` |
 | `Confluence:TimeoutSeconds` | Total request timeout (default 30) |
 | `Jira:BaseUrl`, `Jira:ApiToken`, `Jira:Email`, `Jira:DeploymentType`, `Jira:TimeoutSeconds` (`Jira__…`) | Same meaning, for Jira |
+| `--stdio` (command-line switch) | MCP over stdin/stdout for clients that start the server themselves. The settings page and `/health` stay on HTTP; logs go to stderr. If the port is taken, the instance keeps serving stdio and watches `settings.json` for changes made on the other instance's page |
 | `DevToolsMcp:Port`, else `PORT`, else 5180 | Listen port |
 | `DevToolsMcp:OpenBrowser` | `false` stops the settings page from opening on first start |
 | `DevToolsMcp:SettingsFile` | Override the per-user settings file path |

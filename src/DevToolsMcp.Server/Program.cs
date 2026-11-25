@@ -7,17 +7,31 @@ using DevToolsMcp.Server.Modules.Confluence;
 using DevToolsMcp.Server.Modules.Jira;
 using DevToolsMcp.Server.Modules.GitHub;
 
-var builder = WebApplication.CreateSlimBuilder(args);
+// --stdio: the MCP client starts this process and talks MCP over stdin/stdout (no Node.js bridge needed).
+// The settings page and /health stay on HTTP; stdout carries only protocol messages, logs go to stderr.
+var stdio = args.Any(a => string.Equals(a, "--stdio", StringComparison.OrdinalIgnoreCase));
+args = [.. args.Where(a => !string.Equals(a, "--stdio", StringComparison.OrdinalIgnoreCase))];
 
-var settingsFile = SettingsStore.AddTo(builder.Configuration); // per-user settings written by the settings page
-var port = builder.ConfigureLocalKestrel();                     // 127.0.0.1 / ::1 only, port 5180 by default
+var builder = WebApplication.CreateSlimBuilder(args);
+if (stdio)
+{
+    builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
+}
+
+// Per-user settings written by the settings page. A stdio instance watches the file, because the page it is edited
+// on may belong to another devtools-mcp instance.
+var settingsFile = SettingsStore.AddTo(builder.Configuration, watch: stdio);
+var port = LocalHosting.ResolvePort(builder.Configuration);   // 127.0.0.1 / ::1 only, port 5180 by default
+var ownsPort = PortGuard.IsFree(port, LocalHosting.AllowRemote(builder.Configuration));
 
 // Started a second time (e.g. double-clicked again)? Point at the running instance instead of crashing on bind.
-if (!PortGuard.IsFree(port, string.Equals(builder.Configuration["DevToolsMcp:AllowRemote"], "true", StringComparison.OrdinalIgnoreCase)))
+// A stdio instance keeps running: its MCP traffic doesn't need the port, and the running instance hosts the page.
+if (!ownsPort && !stdio)
 {
     return await PortGuard.ReportInUseAsync(port, builder.Configuration);
 }
 
+builder.ConfigureLocalKestrel(ownsPort ? port : 0);
 builder.AddDevToolsTelemetry();                                  // OTLP traces/metrics/logs (Aspire dashboard)
 
 // 1) Compose the AOT-safe JSON contexts of all modules.
@@ -29,10 +43,16 @@ var mcp = builder.Services
     .AddMcpServer(o =>
     {
         o.ServerInfo = new() { Name = DevToolsTelemetry.ServiceName, Version = "1.0.0" };
-        o.Capabilities = new() { Tools = new() }; // answer tools/list (empty) even when no module is configured
+        // Answer tools/list (empty) even when no module is configured. A stdio session lives as long as the client,
+        // so it announces tool list changes after a settings change; stateless HTTP has no session to notify.
+        o.Capabilities = new() { Tools = new() { ListChanged = stdio } };
     })
     .WithHttpTransport(o => o.Stateless = true)
     .WithModuleToolGate();                      // hide tools of unconfigured modules (zero schema tokens)
+if (stdio)
+{
+    mcp.WithStdioServerTransport();             // ends the process when the client closes stdin
+}
 
 // 3) Register modules.
 mcp.AddConfluenceModule(builder.Configuration, json.McpOptions);
@@ -59,11 +79,21 @@ app.Lifetime.ApplicationStarted.Register(() =>
         log.LogInformation("{Module}: {State} ({Status})", m.Title, status.Active ? "active" : "inactive", status.Message);
     }
 
-    log.LogInformation("MCP endpoint: {Mcp}  Settings: {Settings}", baseUrl + "mcp", baseUrl);
+    log.LogInformation(stdio ? "MCP over stdio  Settings: {Settings}" : "MCP endpoint: {Mcp}  Settings: {Settings}",
+        stdio ? baseUrl : baseUrl + "mcp", baseUrl);
+    if (!ownsPort)
+    {
+        log.LogInformation("Port {Port} is in use (usually by another devtools-mcp instance); edit settings on that instance's page.", port);
+    }
+
+    if (stdio)
+    {
+        StdioToolListNotifier.Start(app.Services, app.Configuration, registry, log);
+    }
 
     // First run (nothing configured): open the settings page. Disable with DevToolsMcp:OpenBrowser=false.
     var openBrowser = !string.Equals(app.Configuration["DevToolsMcp:OpenBrowser"], "false", StringComparison.OrdinalIgnoreCase);
-    if (openBrowser && !registry.ActiveModules(app.Services).Any())
+    if (openBrowser && ownsPort && !registry.ActiveModules(app.Services).Any())
     {
         BrowserLauncher.TryOpen(baseUrl, log);
     }
