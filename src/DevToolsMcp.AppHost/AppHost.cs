@@ -3,11 +3,11 @@ using System.Runtime.InteropServices;
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Integration parameters. Every provider follows the same <provider>-url / -email / -token pattern, mapped to
-// <Provider>__BaseUrl / __Email / __ApiToken. Add Jira or GitHub by adding one more Provider(...) line.
+// <Provider>__BaseUrl / __Email / __ApiToken. Add a provider by adding one more Provider(...) line.
 Provider[] providers =
 [
     Provider.Create(builder, "confluence", "Confluence", withDeploymentType: true),
-    // Provider.Create(builder, "jira", "Jira", withDeploymentType: true),
+    Provider.Create(builder, "jira", "Jira", withDeploymentType: true),
     // Provider.Create(builder, "github", "GitHub"),
 ];
 
