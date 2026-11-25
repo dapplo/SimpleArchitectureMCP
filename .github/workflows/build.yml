@@ -57,6 +57,8 @@ jobs:
           "$bin" & pid=$!
           for i in $(seq 1 50); do curl -fsS http://127.0.0.1:5180/health && break; sleep 0.2; done
           curl -fsS http://127.0.0.1:5180/health
+          # A second start must detect the running instance and exit cleanly (not crash on the taken port).
+          DevToolsMcp__OpenBrowser=false "$bin"
           kill $pid
 
       - name: Package
