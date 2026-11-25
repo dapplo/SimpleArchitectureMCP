@@ -1,10 +1,10 @@
 # What devtools-mcp brings, and why
 
-devtools-mcp is a small MCP server that runs on your own machine and connects an AI assistant to the developer tools you already use (Confluence, GitHub, …). It doesn't add features those services lack. Its purpose is to make each interaction **cheaper in tokens**, so you pay less, wait less and keep more of the context window for your actual work.
+devtools-mcp is a small MCP server that runs on your own machine and connects an AI assistant to the developer tools you already use: Confluence, Jira and GitHub (the Jira module arrives with PR #3). It doesn't add features those services lack. Its purpose is to make each interaction **cheaper in tokens**, so you pay less, wait less and keep more of the context window for your actual work.
 
 | | Without devtools-mcp | With devtools-mcp |
 | --- | --- | --- |
-| Tool definitions sent with every request | Every tool of every server you connect, used or not | Only tools of modules you configured: 6 per provider (Confluence ≈ 0.6 K tokens, GitHub ≈ 0.8 K) |
+| Tool definitions sent with every request | Every tool of every server you connect, used or not | Only tools of modules you configured: 6–7 per provider (Confluence ≈ 0.6 K tokens, Jira ≈ 0.8 K, GitHub ≈ 0.8 K) |
 | A typical answer (search, get) | Raw API JSON: URLs, ids, user objects, reactions | One line per hit, or Markdown with a short front matter |
 | Changing several things on an item | Several tool calls, each answered with a full object | One call, answered with one confirmation line |
 | Credentials | Often a hosted service or a token in a config file per client | Your own token, stored per user on your machine, used only from `localhost` |
@@ -61,6 +61,41 @@ Confluence's REST API is especially wasteful for a model, for two reasons:
 * Writing in Markdown is also cheaper than writing storage XHTML: the model produces fewer output tokens, which are the most expensive and slowest kind.
 
 > **Not yet measured:** byte counts against a live Confluence. The cloud container that wrote this document can't reach a public Confluence, and the measurement through the browser wasn't permitted. To fill in real numbers, run any `confluence_*` call through the Aspire AppHost and compare `devtools.http.client.response.body.size` (bytes from Confluence) with `devtools.mcp.tool.output.size` (characters returned), as described in [Measure it yourself](#measure-it-yourself).
+
+## Jira
+
+### Fixed cost: the tool list
+
+| Setup | Tools | Size | ≈ Tokens |
+| --- | --- | --- | --- |
+| devtools-mcp Jira module | 7 | 3.1 KB | ~780 |
+
+This is measured the same way as GitHub: compact name, description and input schema. The seven tools are search, get, create, update (which also covers assignee and labels), transition (including close), comment and attach. There are no project, workflow, scheme, permission or user-admin tools to pay for. We haven't compared against the schemas of other Jira MCP servers.
+
+### Variable cost: what each call returns
+
+Measured against the public Apache Jira (Jira Data Center 10.3, `issues.apache.org`) on 2026-11-25. The table compares the raw REST v2 response with the devtools-mcp tool result:
+
+| Call | Raw Jira API | devtools-mcp | Smaller by |
+| --- | --- | --- | --- |
+| Search, 20 issues (`project = KAFKA ORDER BY updated DESC`) | 234 KB (default fields); 32.6 KB even with `fields=` limited to the five printed fields | 2.4 KB | ~97× (13× against the filtered JSON) |
+| One issue with comments (`KAFKA-10645`, 10 comments, 2.3 KB description) | 32.8 KB (131 fields, 92 of them custom fields; all 10 comments) | 6.0 KB (front matter, Markdown description, latest 5 comments) | ~5.4× |
+| One issue that is mostly text (`KAFKA-17000`, a 21 KB stack trace, no comments) | 32.0 KB | ≈ 21 KB | ~1.5× |
+
+Where the savings come from:
+
+* **Only the fields that are printed are requested.** A default Jira issue response carries every field of the project's screens, mostly custom fields (`customfield_10010: null`, …), plus `self` links, avatar URL maps, `watches`, `votes`, `worklog`, `timetracking` and the full comment list. devtools-mcp asks for 13 fields when it gets an issue and 5 when it searches.
+* **Search hits are one line each:** `key | type | status | assignee | updated | summary`, plus a `(20 of 20382; refine the JQL)` hint when there are more.
+* **Comments are capped.** `jira_get_issue` includes the latest N comments (default 5, `comments=0` for none). The raw API always returns all of them, and on KAFKA-10645 they alone are 18.7 KB.
+* **Markdown instead of Jira markup or ADF.** Descriptions and comments come back as Markdown (`{code:java}` becomes a fenced block, `[~user]` becomes `@user`, and `{color}` noise is removed), and the model writes Markdown back. Both Cloud and Data Center are read through REST API v2, so on Cloud the model never sees Atlassian Document Format JSON, which is several times larger than the text it describes.
+* **One call where Jira needs several.** `jira_update_issue` edits fields, adds or removes labels and (re)assigns in one call, and answers with one line (`Updated OPS-7: summary, labels, assignee → Jane Doe.`). `jira_transition_issue` finds the transition by name or target status, so closing an issue takes one call instead of "list transitions, pick an id, post". A wrong name returns the short list of valid transitions instead of an error to retry from.
+* **Users by name.** The assignee can be given as `me`, a username, an email or a display name. The server resolves it to an `accountId` (Cloud) or `name` (Data Center), so the model never has to search for users and copy account ids.
+
+The third row shows the limit: when an issue is mostly text, that text is the cost. devtools-mcp only removes the envelope around it.
+
+### Reproduce
+
+The numbers come from anonymous REST v2 calls against `https://issues.apache.org/jira/rest/api/2/` (`search?jql=…&maxResults=20`, `issue/KAFKA-10645`, `issue/KAFKA-17000`). The devtools-mcp sizes come from feeding those responses through `JiraService`. Against your own Jira, compare `devtools.http.client.response.body.size` with `devtools.mcp.tool.output.size` in the Aspire dashboard.
 
 ## GitHub
 
