@@ -23,6 +23,12 @@
     <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2046;IL2057;IL2067;IL2070;IL2072;IL2075;IL2087;IL2091;IL3050;IL3051</WarningsAsErrors>
   </PropertyGroup>
 
+  <!-- osx-x64: Xcode 15/16's ld_classic (the SDK default there) rejects unaligned pointers in
+       libSystem.Net.Security.Native.a; the new Apple linker only warns. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'osx-x64'">
+    <UseLdClassicXCodeLinker>false</UseLdClassicXCodeLinker>
+  </PropertyGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="DevToolsMcp.Tests" />
   </ItemGroup>
