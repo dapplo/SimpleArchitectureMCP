@@ -2,10 +2,10 @@ namespace DevToolsMcp.Server.Modules.Confluence;
 
 /// <summary>Confluence Data Center / Server: REST API v1 under the configured base URL (context path respected).</summary>
 public sealed class DataCenterConfluenceAdapter(IHttpClientFactory httpClientFactory, ConfluenceOptions options)
-    : ConfluenceAdapterBase(httpClientFactory)
+    : ConfluenceAdapterBase(httpClientFactory, options.GetApiBaseAddress(ConfluenceDeploymentType.DataCenter),
+        options.CreateAuthorization(ConfluenceDeploymentType.DataCenter))
 {
     private const string Content = "rest/api/content";
-    private readonly Uri _base = options.GetApiBaseAddress(ConfluenceDeploymentType.DataCenter);
 
     public override ConfluenceDeploymentType DeploymentType => ConfluenceDeploymentType.DataCenter;
 
@@ -35,7 +35,7 @@ public sealed class DataCenterConfluenceAdapter(IHttpClientFactory httpClientFac
         };
         var content = await SendAsync(HttpMethod.Post, Content, request,
             ConfluenceJsonContext.Default.V1CreateRequest, ConfluenceJsonContext.Default.V1Content, ct).ConfigureAwait(false);
-        return new ConfluencePageRef(content.Id ?? string.Empty, content.Title ?? title, WebUrl(content.Links, _base));
+        return new ConfluencePageRef(content.Id ?? string.Empty, content.Title ?? title, WebUrl(content.Links, BaseAddress));
     }
 
     public override async Task UpdatePageAsync(string pageId, string title, string storageBody, int newVersion, string? versionMessage, CancellationToken ct)

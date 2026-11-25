@@ -12,7 +12,7 @@ public static class LocalHosting
     /// Binds Kestrel to loopback only (127.0.0.1 and ::1). The port comes from <c>DevToolsMcp:Port</c>,
     /// then <c>PORT</c> (set by Aspire), then 5180. Binding all interfaces requires <c>DevToolsMcp:AllowRemote=true</c>.
     /// </summary>
-    public static WebApplicationBuilder ConfigureLocalKestrel(this WebApplicationBuilder builder)
+    public static int ConfigureLocalKestrel(this WebApplicationBuilder builder)
     {
         var config = builder.Configuration;
         var port = ParsePort(config["DevToolsMcp:Port"]) ?? ParsePort(config["PORT"]) ?? DefaultPort;
@@ -30,7 +30,7 @@ public static class LocalHosting
             }
         });
 
-        return builder;
+        return port;
     }
 
     private static int? ParsePort(string? value) =>
@@ -38,7 +38,8 @@ public static class LocalHosting
 
     /// <summary>
     /// When <c>McpAuth:ApiKey</c> is configured, requires <c>Authorization: Bearer &lt;key&gt;</c> (or <c>X-API-Key</c>)
-    /// on every request except <c>/health</c>.
+    /// on every request except <c>/health</c> and the static settings page shell (<c>GET /</c>); the page's API calls
+    /// still need the key.
     /// </summary>
     public static IApplicationBuilder UseOptionalApiKey(this WebApplication app)
     {
@@ -51,7 +52,8 @@ public static class LocalHosting
         var expected = Encoding.UTF8.GetBytes(key);
         return app.Use(async (ctx, next) =>
         {
-            if (ctx.Request.Path.StartsWithSegments("/health") || IsAuthorized(ctx.Request, expected))
+            var path = ctx.Request.Path;
+            if (path.StartsWithSegments("/health") || (path == "/" && HttpMethods.IsGet(ctx.Request.Method)) || IsAuthorized(ctx.Request, expected))
             {
                 await next(ctx);
                 return;

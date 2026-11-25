@@ -73,7 +73,7 @@ public sealed class ConfluenceTools(ConfluenceService confluence)
         {
             return DevToolsTelemetry.Output(tool, await action().ConfigureAwait(false));
         }
-        catch (Exception ex) when (ex is ConfluenceApiException or ArgumentException or HttpRequestException or TimeoutException)
+        catch (Exception ex) when (ex is ConfluenceApiException or ConfluenceNotConfiguredException or ArgumentException or HttpRequestException or TimeoutException)
         {
             throw new McpException(ex.Message, ex);
         }

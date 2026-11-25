@@ -54,7 +54,9 @@ internal static class McpServerResourceExtensions
         resource
             .WithHttpEndpoint(port: McpPort, env: "PORT", name: "http")
             .WithMcpServer(path: "/mcp", endpointName: "http")
-            .WithHttpHealthCheck("/health");
+            .WithHttpHealthCheck("/health")
+            .WithUrlForEndpoint("http", u => u.DisplayText = "Settings")
+            .WithEnvironment("DevToolsMcp__OpenBrowser", "false"); // the dashboard links to the settings page instead
 
         foreach (var p in providers)
         {

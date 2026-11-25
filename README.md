@@ -4,7 +4,8 @@ A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io
 
 * **.NET 11**, `WebApplication.CreateSlimBuilder`, official `ModelContextProtocol.AspNetCore` SDK over **Streamable HTTP** (`/mcp`)
 * Published as a **single-file, self-contained Native AOT** executable (~24 MB, about 60–80 ms from launch to healthy)
-* Orchestrated by an **Aspire 17** AppHost, with OpenTelemetry traces, metrics and logs in the Aspire dashboard
+* **Double-click to run**: a built-in settings page (`http://localhost:5180/`) opens on first start; paste your Confluence URL and token and the tools switch on without a restart
+* Optional **Aspire 17** AppHost for development, with OpenTelemetry traces, metrics and logs in the Aspire dashboard
 * First integration: **Atlassian Confluence**, both **Cloud** and **Data Center / Server (on-prem)**
 * Vertical feature slices, so **Jira, GitHub, …** plug in without touching the core
 
@@ -12,13 +13,22 @@ A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io
 
 | Technique | Effect |
 | --- | --- |
-| Modules without configuration register **no tools** | Unused integrations add zero schema tokens |
+| Tools of unconfigured modules are **hidden from `tools/list`** | Unused integrations add zero schema tokens |
 | Terse tool descriptions, primitive parameters | All 6 Confluence tool schemas total ≈ 2.5 KB (~630 tokens) |
 | Pages are returned as **Markdown**, not storage XHTML | Usually several times smaller than the raw body |
 | Search/children return one `id \| title \| …` line per hit | No `_links`, `_expandable` or user metadata |
 | `confluence_append_to_page` | Adds content without the model re-sending the whole page |
 | Automatic version handling | No failed calls and retries for version conflicts |
 | `devtools.mcp.tool.output.size` metric | See exactly how many characters each tool returns |
+
+## Quick start (no SDK needed)
+
+1. Download the archive for your OS from the latest [release](../../releases) and extract it.
+2. Double-click `devtools-mcp` (`devtools-mcp.exe` on Windows). A console window shows the server log.
+3. On first start the settings page opens in your browser (`http://localhost:5180/`). Enter the Confluence base URL, your email (Cloud only) and the API token, then **Save**. The page tests the connection, and the Confluence tools become available immediately.
+4. Point your MCP client at `http://localhost:5180/mcp` (see [VS Code](#use-from-vs-code--github-copilot)). If the client was already connected, reload its MCP server so it fetches the new tool list.
+
+Settings are stored per user in `%APPDATA%\devtools-mcp\settings.json` (Windows) or `~/.config/devtools-mcp/settings.json` (Linux/macOS), readable only by you on Linux/macOS. Environment variables and `appsettings.json` work too; environment variables win over the settings page.
 
 ## Repository layout
 
@@ -96,11 +106,13 @@ Storage XHTML → Markdown uses `System.Xml.Linq`. Markdown → storage uses the
 | `Confluence:DeploymentType` (`Confluence__DeploymentType`) | `Auto` \| `Cloud` \| `DataCenter` |
 | `Confluence:TimeoutSeconds` | Total request timeout (default 30) |
 | `DevToolsMcp:Port`, else `PORT`, else 5180 | Listen port |
+| `DevToolsMcp:OpenBrowser` | `false` stops the settings page from opening on first start |
+| `DevToolsMcp:SettingsFile` | Override the per-user settings file path |
 | `DevToolsMcp:AllowRemote` | `true` binds all interfaces. Default: loopback only (`127.0.0.1` and `::1`) |
 | `McpAuth:ApiKey` (`McpAuth__ApiKey`) | If set, `/mcp` requires `Authorization: Bearer <key>` or `X-API-Key` (`/health` stays open) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Enables OTLP export (Aspire sets it automatically) |
 
-The server binds to loopback only by default, so the unauthenticated endpoint is never exposed on external interfaces.
+The server binds to loopback only by default, so the unauthenticated endpoint is never exposed on external interfaces. The settings API additionally rejects non-loopback `Host` headers (DNS rebinding) and cross-origin requests, never returns stored tokens, and requires the token to be re-entered when the URL changes, so a malicious web page cannot redirect your credentials.
 
 ## Build, test, publish
 
@@ -128,7 +140,9 @@ Confluence__BaseUrl=https://acme.atlassian.net Confluence__Email=me@acme.com Con
 curl http://localhost:5180/health    # {"status":"ok","modules":["confluence:Cloud"]}
 ```
 
-## Run with Aspire
+## Run with Aspire (optional, for development)
+
+Aspire is not needed to use the server. It is useful while developing modules: the dashboard shows every tool call, downstream request, latency and payload size.
 
 ```bash
 dotnet tool install -g Aspire.Cli    # Aspire 17 runs AppHosts through the CLI bundle
@@ -157,7 +171,7 @@ To check that Aspire uses the AOT binary, publish it first and run `aspire run`.
 
 ## Adding a provider (Jira, GitHub, …)
 
-Create `Modules/Jira/` with options, DTOs, an adapter and tools, the same way as `Modules/Confluence/`. Then wire it up in three steps:
+Create `Modules/Jira/` with options, DTOs, an adapter and tools, the same way as `Modules/Confluence/` (`ConfluenceConnection` shows how to rebuild the adapter when settings change). Then wire it up in three steps:
 
 ```csharp
 // Modules/Jira/JiraModule.cs
@@ -165,20 +179,16 @@ public static class JiraModule
 {
     public static IMcpServerBuilder AddJiraModule(this IMcpServerBuilder mcp, IConfiguration config, JsonSerializerOptions? json = null)
     {
-        var registry = ModuleRegistry.From(mcp.Services);
-        var options = new JiraOptions();
-        config.GetSection("Jira").Bind(options);                       // 1) options (source-generated binder)
-        if (string.IsNullOrWhiteSpace(options.BaseUrl) || string.IsNullOrWhiteSpace(options.ApiToken))
-        {
-            registry.MarkDisabled("jira", "Jira:BaseUrl and Jira:ApiToken not set");
-            return mcp;                                                  // no tools, zero tokens
-        }
+        mcp.Services.AddModuleHttpClient("jira", TimeSpan.FromSeconds(30));
+        mcp.Services.AddSingleton(sp => new JiraConnection(config, sp.GetRequiredService<IHttpClientFactory>())); // 1) options, rebuilt on reload
+        mcp.WithTools<JiraTools>(json);                                  // 3) tools, named jira_*
 
-        mcp.Services.AddSingleton(options);
-        mcp.Services.AddModuleHttpClient("jira", new Uri(options.BaseUrl.TrimEnd('/') + "/"),
-            StaticAuthHandler.Bearer(options.ApiToken), TimeSpan.FromSeconds(30));
-        mcp.WithTools<JiraTools>(json);                                  // 3) conditional WithTools<T>()
-        registry.MarkEnabled("jira");
+        ModuleRegistry.From(mcp.Services).Add(new ModuleDescriptor       // settings page + tool gate
+        {
+            Name = "jira", Title = "Jira", Section = "Jira", ToolPrefix = "jira_",
+            Settings = [new("BaseUrl", "Base URL", "url", Required: true), new("ApiToken", "API token", "secret", Required: true)],
+            Status = sp => sp.GetRequiredService<JiraConnection>().Status,  // inactive => tools hidden, zero tokens
+        });
         return mcp;
     }
 }
@@ -194,7 +204,7 @@ mcp.AddConfluenceModule(builder.Configuration, json.McpOptions);
 mcp.AddJiraModule(builder.Configuration, json.McpOptions);                                  // 3)
 ```
 
-In the AppHost, uncomment `Provider.Create(builder, "jira", "Jira", …)` to get the `jira-url`, `jira-email` and `jira-token` parameters and the `Jira__*` environment variables. Prefix the tool names (`jira_*`, `github_*`) so they never collide.
+The settings page renders the new module's form automatically. In the AppHost, uncomment `Provider.Create(builder, "jira", "Jira", …)` to get the `jira-url`, `jira-email` and `jira-token` parameters and the `Jira__*` environment variables. Prefix the tool names (`jira_*`, `github_*`) so they never collide.
 
 ## License
 

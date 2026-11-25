@@ -6,23 +6,32 @@ namespace DevToolsMcp.Server.Core.Http;
 public static class ModuleHttpClientExtensions
 {
     /// <summary>
-    /// Registers an isolated named HttpClient for an integration module: base address, auth, payload metrics,
-    /// and a standard resilience pipeline (retries only for safe/idempotent methods).
+    /// Registers an isolated named HttpClient for an integration module: payload metrics, a standard resilience
+    /// pipeline (retries only for safe/idempotent methods) and, optionally, a fixed base address and credentials.
+    /// Modules whose settings can change at runtime leave those null and set them per adapter/request instead.
     /// HttpClient tracing/metrics are picked up by OpenTelemetry automatically.
     /// </summary>
-    public static IHttpClientBuilder AddModuleHttpClient(this IServiceCollection services, string name, Uri baseAddress,
-        AuthenticationHeaderValue authorization, TimeSpan timeout)
+    public static IHttpClientBuilder AddModuleHttpClient(this IServiceCollection services, string name, TimeSpan timeout,
+        Uri? baseAddress = null, AuthenticationHeaderValue? authorization = null)
     {
         var builder = services
             .AddHttpClient(name, client =>
             {
-                client.BaseAddress = baseAddress;
+                if (baseAddress is not null)
+                {
+                    client.BaseAddress = baseAddress;
+                }
+
                 client.Timeout = Timeout.InfiniteTimeSpan; // governed by the resilience pipeline
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("devtools-mcp", "1.0"));
             })
-            .AddHttpMessageHandler(() => new StaticAuthHandler(authorization))
             .AddHttpMessageHandler(() => new PayloadMetricsHandler(name));
+
+        if (authorization is not null)
+        {
+            builder.AddHttpMessageHandler(() => new StaticAuthHandler(authorization));
+        }
 
         builder.AddStandardResilienceHandler(o =>
         {

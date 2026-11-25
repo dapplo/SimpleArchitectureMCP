@@ -9,7 +9,8 @@ using System.Text.RegularExpressions;
 namespace DevToolsMcp.Server.Modules.Confluence;
 
 /// <summary>Shared HTTP plumbing and the v1 CQL search, which is identical on Cloud and Data Center.</summary>
-public abstract partial class ConfluenceAdapterBase(IHttpClientFactory httpClientFactory) : IConfluenceApiAdapter
+public abstract partial class ConfluenceAdapterBase(IHttpClientFactory httpClientFactory, Uri baseAddress, AuthenticationHeaderValue authorization)
+    : IConfluenceApiAdapter
 {
     private const int MaxExcerpt = 160;
 
@@ -18,7 +19,16 @@ public abstract partial class ConfluenceAdapterBase(IHttpClientFactory httpClien
     /// <summary>Relative prefix of the v1 REST API: <c>wiki/rest/api/</c> (Cloud) or <c>rest/api/</c> (Data Center).</summary>
     protected abstract string RestApiPrefix { get; }
 
-    protected HttpClient Http => httpClientFactory.CreateClient(ConfluenceModule.HttpClientName);
+    /// <summary>HttpClient base address (always ends with '/').</summary>
+    protected Uri BaseAddress { get; } = baseAddress;
+
+    // Base address and credentials live on the adapter, so saving new settings swaps them without a restart.
+    private HttpClient CreateClient()
+    {
+        var client = httpClientFactory.CreateClient(ConfluenceModule.HttpClientName);
+        client.BaseAddress = BaseAddress;
+        return client;
+    }
 
     public async Task<IReadOnlyList<ConfluenceSearchHit>> SearchAsync(string cql, int limit, CancellationToken ct)
     {
@@ -57,7 +67,9 @@ public abstract partial class ConfluenceAdapterBase(IHttpClientFactory httpClien
 
     protected async Task<T> GetAsync<T>(string path, JsonTypeInfo<T> typeInfo, CancellationToken ct)
     {
-        using var response = await Http.GetAsync(path, ct).ConfigureAwait(false);
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Authorization = authorization;
+        using var response = await CreateClient().SendAsync(request, ct).ConfigureAwait(false);
         return await ReadAsync(response, typeInfo, ct).ConfigureAwait(false);
     }
 
@@ -68,7 +80,8 @@ public abstract partial class ConfluenceAdapterBase(IHttpClientFactory httpClien
         var content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(body, requestInfo));
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
         using var request = new HttpRequestMessage(method, path) { Content = content };
-        using var response = await Http.SendAsync(request, ct).ConfigureAwait(false);
+        request.Headers.Authorization = authorization;
+        using var response = await CreateClient().SendAsync(request, ct).ConfigureAwait(false);
         return await ReadAsync(response, responseInfo, ct).ConfigureAwait(false);
     }
 

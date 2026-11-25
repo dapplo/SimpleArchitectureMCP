@@ -8,8 +8,19 @@ namespace DevToolsMcp.Server.Modules.Confluence;
 /// Deployment-agnostic tool logic: input validation, Markdown conversion, automatic version increments,
 /// and compact, token-lean text output.
 /// </summary>
-public sealed partial class ConfluenceService(IConfluenceApiAdapter api)
+public sealed partial class ConfluenceService
 {
+    private readonly Func<IConfluenceApiAdapter> _adapter;
+
+    /// <param name="adapter">Resolves the current adapter (settings can change at runtime).</param>
+    public ConfluenceService(Func<IConfluenceApiAdapter> adapter) => _adapter = adapter;
+
+    public ConfluenceService(IConfluenceApiAdapter adapter) : this(() => adapter)
+    {
+    }
+
+    private IConfluenceApiAdapter Api => _adapter();
+
     public const int MaxSearchLimit = 25;
     public const int MaxChildrenLimit = 100;
 
@@ -20,7 +31,7 @@ public sealed partial class ConfluenceService(IConfluenceApiAdapter api)
             throw new ArgumentException("query is required.");
         }
 
-        var hits = await api.SearchAsync(ConfluenceCql.Build(query, spaceKey), Math.Clamp(limit, 1, MaxSearchLimit), ct).ConfigureAwait(false);
+        var hits = await Api.SearchAsync(ConfluenceCql.Build(query, spaceKey), Math.Clamp(limit, 1, MaxSearchLimit), ct).ConfigureAwait(false);
         if (hits.Count == 0)
         {
             return "No results.";
@@ -43,7 +54,7 @@ public sealed partial class ConfluenceService(IConfluenceApiAdapter api)
     public async Task<string> GetPageAsync(string pageId, string? format, CancellationToken ct)
     {
         var storage = IsStorage(format);
-        var page = await api.GetPageAsync(ValidateId(pageId), includeBody: true, ct).ConfigureAwait(false);
+        var page = await Api.GetPageAsync(ValidateId(pageId), includeBody: true, ct).ConfigureAwait(false);
         var body = page.StorageBody ?? string.Empty;
         var content = storage ? body : ConfluenceMarkupConverter.ToMarkdown(body);
         return $"---\nid: {page.Id}\ntitle: {page.Title}\nversion: {page.Version}\n---\n{content}";
@@ -51,7 +62,7 @@ public sealed partial class ConfluenceService(IConfluenceApiAdapter api)
 
     public async Task<string> GetChildrenAsync(string pageId, int limit, CancellationToken ct)
     {
-        var children = await api.GetChildrenAsync(ValidateId(pageId), Math.Clamp(limit, 1, MaxChildrenLimit), ct).ConfigureAwait(false);
+        var children = await Api.GetChildrenAsync(ValidateId(pageId), Math.Clamp(limit, 1, MaxChildrenLimit), ct).ConfigureAwait(false);
         return children.Count == 0
             ? "No child pages."
             : string.Join('\n', children.Select(c => $"{c.Id} | {c.Title}"));
@@ -64,7 +75,7 @@ public sealed partial class ConfluenceService(IConfluenceApiAdapter api)
             throw new ArgumentException("space_key and title are required.");
         }
 
-        var created = await api.CreatePageAsync(spaceKey.Trim(), string.IsNullOrWhiteSpace(parentId) ? null : ValidateId(parentId),
+        var created = await Api.CreatePageAsync(spaceKey.Trim(), string.IsNullOrWhiteSpace(parentId) ? null : ValidateId(parentId),
             title.Trim(), ConfluenceMarkupConverter.ToStorage(markdownBody ?? string.Empty), ct).ConfigureAwait(false);
         return $"Created {created.Id} | {created.Title} | {created.WebUrl}";
     }
@@ -98,11 +109,11 @@ public sealed partial class ConfluenceService(IConfluenceApiAdapter api)
     {
         for (var attempt = 0; ; attempt++)
         {
-            var current = await api.GetPageAsync(id, includeBody, ct).ConfigureAwait(false);
+            var current = await Api.GetPageAsync(id, includeBody, ct).ConfigureAwait(false);
             var next = current.Version + 1;
             try
             {
-                await api.UpdatePageAsync(id, string.IsNullOrWhiteSpace(title) ? current.Title : title.Trim(), body(current), next,
+                await Api.UpdatePageAsync(id, string.IsNullOrWhiteSpace(title) ? current.Title : title.Trim(), body(current), next,
                     string.IsNullOrWhiteSpace(versionMessage) ? null : versionMessage, ct).ConfigureAwait(false);
                 return next;
             }

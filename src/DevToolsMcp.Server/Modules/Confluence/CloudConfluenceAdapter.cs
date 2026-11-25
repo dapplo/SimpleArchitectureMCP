@@ -5,7 +5,8 @@ namespace DevToolsMcp.Server.Modules.Confluence;
 
 /// <summary>Confluence Cloud: REST API v2 for pages, v1 for CQL search. Paths are relative to the site root.</summary>
 public sealed class CloudConfluenceAdapter(IHttpClientFactory httpClientFactory, ConfluenceOptions options)
-    : ConfluenceAdapterBase(httpClientFactory)
+    : ConfluenceAdapterBase(httpClientFactory, options.GetApiBaseAddress(ConfluenceDeploymentType.Cloud),
+        options.CreateAuthorization(ConfluenceDeploymentType.Cloud))
 {
     private const string V2 = "wiki/api/v2/";
     private readonly ConcurrentDictionary<string, string> _spaceIds = new(StringComparer.OrdinalIgnoreCase);
