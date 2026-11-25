@@ -9,6 +9,13 @@ A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io
 * Integrations: **Atlassian Confluence** and **Jira** (Cloud and Data Center / Server) and **GitHub issues** (github.com and GitHub Enterprise)
 * Vertical feature slices, so further providers plug in without touching the core
 
+## Documentation
+
+* [Connect your client](docs/clients.md): VS Code / GitHub Copilot, Copilot CLI, Claude Code, Claude Desktop, Cursor, Windsurf, JetBrains AI Assistant, Codex CLI, and stdio-only clients; with and without an API key
+* [What you can do with it](docs/examples.md): example prompts and cross-tool workflows
+* [Aspire](docs/aspire.md): dashboard, telemetry, parameters, and the Aspire MCP server for coding agents
+* [Token savings](docs/token-savings.md): measurements and why they matter
+
 ## Why it is cheap on tokens
 
 See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it matters, and measurements against raw APIs and the official GitHub MCP server.
@@ -30,7 +37,8 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 1. Download the archive for your OS from the latest [release](../../releases) and extract it.
 2. Double-click `devtools-mcp` (`devtools-mcp.exe` on Windows). A console window shows the server log.
 3. On first start the settings page opens in your browser (`http://localhost:5180/`). Fill in the modules you use (Confluence and Jira: base URL, email for Cloud, API token; GitHub: a personal access token, plus the URL only for GitHub Enterprise), then **Save**. The page tests the connection, and that module's tools become available immediately.
-4. Point your MCP client at `http://localhost:5180/mcp` (see [VS Code](#use-from-vs-code--github-copilot)). If the client was already connected, reload its MCP server so it fetches the new tool list.
+4. Point your MCP client at `http://localhost:5180/mcp`. [docs/clients.md](docs/clients.md) has the setup for VS Code / GitHub Copilot, Claude Code, Claude Desktop, Cursor, Windsurf, JetBrains and Codex. If the client was already connected, reload its MCP server so it fetches the new tool list.
+5. Ask away: [docs/examples.md](docs/examples.md) has example prompts and workflows across Confluence, Jira and GitHub.
 
 Settings are stored per user in `%APPDATA%\devtools-mcp\settings.json` (Windows) or `~/.config/devtools-mcp/settings.json` (Linux/macOS), readable only by you on Linux/macOS. Environment variables and `appsettings.json` work too; environment variables win over the settings page.
 
@@ -210,7 +218,7 @@ curl http://localhost:5180/health    # {"status":"ok","modules":["confluence:Clo
 
 ## Run with Aspire (optional, for development)
 
-Aspire is not needed to use the server. It is useful while developing modules: the dashboard shows every tool call, downstream request, latency and payload size.
+Aspire is not needed to use the server. It is useful while developing modules: the dashboard shows every tool call, downstream request, latency and payload size. [docs/aspire.md](docs/aspire.md) describes everything it offers, including the Aspire MCP server for coding agents.
 
 ```bash
 dotnet tool install -g Aspire.Cli    # Aspire 17 runs AppHosts through the CLI bundle
@@ -227,6 +235,8 @@ The AppHost:
 To check that Aspire uses the AOT binary, publish it first and run `aspire run`. The `devtools-mcp` resource then shows `artifacts/publish/<rid>/devtools-mcp` as its command, and `/health` answers through port 5180.
 
 ## Use from VS Code / GitHub Copilot
+
+Other clients and the API-key variant: see [docs/clients.md](docs/clients.md).
 
 `.vscode/mcp.json`:
 
