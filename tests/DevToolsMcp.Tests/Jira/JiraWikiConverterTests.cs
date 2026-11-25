@@ -48,6 +48,7 @@ public class JiraWikiConverterTests
         Assert.Equal("```java\nint *p = _x_;\n```", JiraWikiConverter.ToMarkdown("{code:language=java|title=T}\nint *p = _x_;\n{code}"));
         Assert.Equal("```\nraw\n```\nafter", JiraWikiConverter.ToMarkdown("{noformat}raw{noformat}\nafter"));
         Assert.Equal("> a\n> **b**", JiraWikiConverter.ToMarkdown("{quote}\na\n*b*\n{quote}"));
+        Assert.Equal("Yes:\n> quoted text\nreply", JiraWikiConverter.ToMarkdown("Yes:\n{quote}quoted text{quote}\nreply"));
         Assert.Equal("| A | B |\n| --- | --- |\n| [l](u) | `x|y` |", JiraWikiConverter.ToMarkdown("||A||B||\n|[l|u]|{{x|y}}|"));
         Assert.Equal("| 1 | 2 |\n| --- | --- |", JiraWikiConverter.ToMarkdown("|1|2|"));
         Assert.Equal(string.Empty, JiraWikiConverter.ToMarkdown(null));

@@ -220,7 +220,9 @@ public static partial class JiraWikiConverter
         var tableHasHeader = false;
         var numbers = new List<int>(); // ordered-list counters per nesting depth
 
-        foreach (var rawLine in wiki.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+        // {quote}/{panel} may share a line with text ("{quote}text" ... "text{quote}"): give each tag its own line.
+        var normalized = QuoteTag().Replace(wiki.Replace("\r\n", "\n").Replace('\r', '\n'), "\n$1\n");
+        foreach (var rawLine in normalized.Split('\n'))
         {
             var line = rawLine;
             var prefix = quoteDepth > 0 ? "> " : string.Empty;
@@ -482,6 +484,9 @@ public static partial class JiraWikiConverter
 
     [GeneratedRegex(@"^\{(?:quote|panel(?::[^}]*)?)\}$", RegexOptions.IgnoreCase)]
     private static partial Regex QuoteOrPanel();
+
+    [GeneratedRegex(@"\n?(\{(?:quote|panel(?::[^}]*)?)\})\n?", RegexOptions.IgnoreCase)]
+    private static partial Regex QuoteTag();
 
     [GeneratedRegex(@"^h([1-6])\.\s*(.*)$")]
     private static partial Regex Heading();
