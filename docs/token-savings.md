@@ -4,7 +4,7 @@ devtools-mcp is a small MCP server that runs on your own machine and connects an
 
 | | Without devtools-mcp | With devtools-mcp |
 | --- | --- | --- |
-| Tool definitions sent with every request | Every tool of every server you connect, used or not | Only tools of modules you configured: 6 per provider, ≈ 0.6–0.8 K tokens each |
+| Tool definitions sent with every request | Every tool of every server you connect, used or not | Only tools of modules you configured: 6 per provider (Confluence ≈ 0.6 K tokens, GitHub ≈ 0.8 K) |
 | A typical answer (search, get) | Raw API JSON: URLs, ids, user objects, reactions | One line per hit, or Markdown with a short front matter |
 | Changing several things on an item | Several tool calls, each answered with a full object | One call, answered with one confirmation line |
 | Credentials | Often a hosted service or a token in a config file per client | Your own token, stored per user on your machine, used only from `localhost` |
@@ -32,10 +32,35 @@ Some benefits have nothing to do with tokens: it runs locally with your own perm
 
 ## Confluence
 
-* Pages come back as **Markdown** instead of storage XHTML, which is usually several times smaller and much easier for the model to read and write.
-* `confluence_append_to_page` adds content **without the model re-sending the whole page**, and existing macros stay untouched.
-* Version numbers are handled by the server (read, increment, retry once on conflict), so there are no failed calls followed by retries.
-* All 6 tool schemas total about 2.5 KB (~630 tokens).
+### Fixed cost: the tool list
+
+| Setup | Tools | Size | ≈ Tokens |
+| --- | --- | --- | --- |
+| devtools-mcp Confluence module | 6 | 2.3 KB | ~575 |
+
+Measured the same way as for GitHub (compact name, description and input schema). Only the six page tools exist: search, get, children, create, update and append. There are no space-admin, permission, attachment-admin or user tools to pay for.
+
+### Variable cost: what each call returns
+
+Confluence's REST API is especially wasteful for a model, for two reasons:
+
+* **The body format.** Pages are stored as *storage format* XHTML: every paragraph, table cell and list item is wrapped in tags, and macros are verbose `<ac:structured-macro>` / `<ac:parameter>` / `<ri:…>` blocks. devtools-mcp converts that to **Markdown**, which carries the same headings, lists, tables, links, code blocks and task lists in a fraction of the characters. Simple macros become one-line placeholders (`**[Confluence Macro: jira | key=ABC-1]**`) that still round-trip back into real macros on update.
+* **The envelope.** A content response also carries `_links`, `_expandable`, version and history objects, space objects and (on Cloud) user metadata. devtools-mcp returns a three-line front matter (`id`, `title`, `version`) and the body.
+
+| Call | Raw REST response | devtools-mcp result |
+| --- | --- | --- |
+| `confluence_search` | Search results with nested `content`, `space`, `_links`, `_expandable` and highlight markers per hit | One line per hit: `id \| title \| space \| date`, plus a cleaned excerpt of at most 160 characters |
+| `confluence_get_page` | JSON envelope plus storage XHTML | `id` / `title` / `version` front matter plus Markdown |
+| `confluence_get_page_children` | Full content objects per child | `id \| title` per child |
+| `confluence_create_page` / `confluence_update_page` | The full new page, body included | `Created <id> \| <title> \| <url>` / `Updated <id> to version <n>.` |
+
+### Fewer calls, and less to send
+
+* `confluence_append_to_page` adds a section **without the model re-sending the page**. Without it, appending means reading the whole page and writing the whole page back: the page body passes through the context twice, and macros risk being lost in the process.
+* `confluence_update_page` handles versions itself: it reads the current version number (metadata only, no body), writes `version + 1`, and retries once on a conflict. The model never has to read a page just to learn its version, and never sees a failed call followed by a retry.
+* Writing in Markdown is also cheaper than writing storage XHTML: the model produces fewer output tokens, which are the most expensive and slowest kind.
+
+> **Not yet measured:** byte counts against a live Confluence. The cloud container that wrote this document can't reach a public Confluence, and the measurement through the browser wasn't permitted. To fill in real numbers, run any `confluence_*` call through the Aspire AppHost and compare `devtools.http.client.response.body.size` (bytes from Confluence) with `devtools.mcp.tool.output.size` (characters returned), as described in [Measure it yourself](#measure-it-yourself).
 
 ## GitHub
 
