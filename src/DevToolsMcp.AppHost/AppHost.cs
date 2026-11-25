@@ -7,7 +7,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 Provider[] providers =
 [
     Provider.Create(builder, "confluence", "Confluence", withDeploymentType: true),
-    // Provider.Create(builder, "jira", "Jira", withDeploymentType: true),
+    Provider.Create(builder, "jira", "Jira", withDeploymentType: true, optional: true),
     Provider.Create(builder, "github", "GitHub", withEmail: false, optional: true),
 ];
 

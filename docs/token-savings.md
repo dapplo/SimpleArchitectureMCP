@@ -1,6 +1,6 @@
 # What devtools-mcp brings, and why
 
-devtools-mcp is a small MCP server that runs on your own machine and connects an AI assistant to the developer tools you already use: Confluence, Jira and GitHub (the Jira module arrives with PR #3). It doesn't add features those services lack. Its purpose is to make each interaction **cheaper in tokens**, so you pay less, wait less and keep more of the context window for your actual work.
+devtools-mcp is a small MCP server that runs on your own machine and connects an AI assistant to the developer tools you already use: Confluence, Jira and GitHub. It doesn't add features those services lack. Its purpose is to make each interaction **cheaper in tokens**, so you pay less, wait less and keep more of the context window for your actual work.
 
 | | Without devtools-mcp | With devtools-mcp |
 | --- | --- | --- |

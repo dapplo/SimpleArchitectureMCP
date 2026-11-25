@@ -6,8 +6,8 @@ A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io
 * Published as a **single-file, self-contained Native AOT** executable (~24 MB, about 60–80 ms from launch to healthy)
 * **Double-click to run**: a built-in settings page (`http://localhost:5180/`) opens on first start; paste your URL and token and the tools switch on without a restart
 * Optional **Aspire 17** AppHost for development, with OpenTelemetry traces, metrics and logs in the Aspire dashboard
-* Integrations: **Atlassian Confluence** (Cloud and Data Center / Server) and **GitHub issues** (github.com and GitHub Enterprise)
-* Vertical feature slices, so **Jira, GitHub, …** plug in without touching the core
+* Integrations: **Atlassian Confluence** and **Jira** (Cloud and Data Center / Server) and **GitHub issues** (github.com and GitHub Enterprise)
+* Vertical feature slices, so further providers plug in without touching the core
 
 ## Why it is cheap on tokens
 
@@ -16,7 +16,8 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 | Technique | Effect |
 | --- | --- |
 | Tools of unconfigured modules are **hidden from `tools/list`** | Unused integrations add zero schema tokens |
-| Terse tool descriptions, primitive parameters | All 6 Confluence tool schemas total ≈ 2.3 KB (~575 tokens); the 6 GitHub tools ≈ 3.2 KB (~800 tokens) |
+| Terse tool descriptions, primitive parameters | All 6 Confluence tool schemas total ≈ 2.3 KB (~575 tokens); the 7 Jira tools ≈ 3.1 KB (~780 tokens); the 6 GitHub tools ≈ 3.2 KB (~800 tokens) |
+| Jira issues are returned as front matter + **Markdown**, with only the fields that matter | No custom fields, avatars, `self` links or changelog |
 | Pages are returned as **Markdown**, not storage XHTML | Usually several times smaller than the raw body |
 | Search/children return one `id \| title \| …` line per hit | No `_links`, `_expandable`, reactions, node ids or user objects |
 | One `github_update_issue` for edit, close/reopen, labels and assignees | One schema instead of five; a single call changes several things |
@@ -28,7 +29,7 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 
 1. Download the archive for your OS from the latest [release](../../releases) and extract it.
 2. Double-click `devtools-mcp` (`devtools-mcp.exe` on Windows). A console window shows the server log.
-3. On first start the settings page opens in your browser (`http://localhost:5180/`). Fill in the modules you use (Confluence: base URL, email for Cloud, API token; GitHub: a personal access token, plus the URL only for GitHub Enterprise), then **Save**. The page tests the connection, and that module's tools become available immediately.
+3. On first start the settings page opens in your browser (`http://localhost:5180/`). Fill in the modules you use (Confluence and Jira: base URL, email for Cloud, API token; GitHub: a personal access token, plus the URL only for GitHub Enterprise), then **Save**. The page tests the connection, and that module's tools become available immediately.
 4. Point your MCP client at `http://localhost:5180/mcp` (see [VS Code](#use-from-vs-code--github-copilot)). If the client was already connected, reload its MCP server so it fetches the new tool list.
 
 Settings are stored per user in `%APPDATA%\devtools-mcp\settings.json` (Windows) or `~/.config/devtools-mcp/settings.json` (Linux/macOS), readable only by you on Linux/macOS. Environment variables and `appsettings.json` work too; environment variables win over the settings page.
@@ -57,6 +58,13 @@ src/
       ConfluenceMarkupConverter*.cs   Storage XHTML <-> Markdown
       ConfluenceService.cs       Versioning, validation, compact output
       ConfluenceTools.cs         The 6 MCP tools
+    Modules/Jira/                The Jira vertical slice (same shape: options, connection, adapters, service, tools)
+      JiraAdapterBase.cs         REST API v2 on Cloud and Data Center
+      CloudJiraAdapter.cs        /search/jql, users by accountId
+      DataCenterJiraAdapter.cs   /search, users by name, context path respected
+      JiraWikiConverter.cs       Jira wiki markup <-> Markdown
+      JiraService.cs             Validation, user resolution, compact output
+      JiraTools.cs               The 7 MCP tools
     Modules/GitHub/              The GitHub issues slice (github.com, ghe.com, Enterprise Server)
       GitHubModule.cs            AddGitHubModule(): conditional registration, settings form
       GitHubOptions.cs           Token, Enterprise URL -> API root, default repository
@@ -106,6 +114,30 @@ Storage XHTML → Markdown uses `System.Xml.Linq`. Markdown → storage uses the
 * Confluence links use small URL schemes: `page:Title?space=KEY`, `attachment:file.pdf`, `user:account-id=…`.
 * Other macros become placeholders: `**[Confluence Macro: jira | key=ABC-1]**`. Macros with a rich-text body (`info`, `note`, `warning`, `expand`, …) become a block quote that starts with the placeholder. **Simple macros like these round-trip back to real macros.** Macros with nested resource parameters or non-code plain-text bodies do not round-trip. For those, the tool description tells the model to use `format=storage` with both `confluence_get_page` and `confluence_update_page`.
 
+## Jira tools
+
+Basic issue work with your own Jira permissions. There are no admin tools (no projects, workflows, schemes or user management).
+
+| Tool | Inputs | Returns |
+| --- | --- | --- |
+| `jira_search` | `jql` (JQL, an issue key, or plain text), `limit` (20, max 50) | `key \| type \| status \| assignee \| yyyy-MM-dd \| summary` per issue |
+| `jira_get_issue` | `issue_key`, `comments` (5, max 50) | Front matter (key, summary, type, status, priority, assignee, labels, parent, url, attachments, …) + Markdown description + latest comments |
+| `jira_create_issue` | `project_key`, `summary`, `issue_type` (`Task`), `description?`, `assignee?`, `labels?`, `priority?`, `parent_key?` | `Created <key> \| <url>` |
+| `jira_update_issue` | `issue_key`, `summary?`, `description?`, `priority?`, `add_labels?`, `remove_labels?`, `assignee?` | `Updated <key>: <changed fields>.` |
+| `jira_transition_issue` | `issue_key`, `transition?`, `comment?`, `resolution?` | Without `transition`: `id \| name → status` per available transition. With it: `<key> → <status>.` |
+| `jira_add_comment` | `issue_key`, `body` | `Commented on <key>.` |
+| `jira_attach_file` | `issue_key`, `file_path` | `Attached <name> (<size>) to <key>.` |
+
+* **Markdown in, Markdown out.** Descriptions and comments are written and read as Markdown and converted to and from Jira wiki markup. Both Cloud and Data Center use REST API v2, which stores wiki markup, so there is no Atlassian Document Format JSON in the prompt.
+* **Close an issue** with `jira_transition_issue` and `transition=Done` (or the transition's name or id, or the target status). Pass `resolution` if your workflow asks for one. A wrong name returns the list of valid transitions.
+* **Assignees** can be `me`, `none` (unassign), a username, an email, a display name or (Cloud) an account id. Ambiguous names fail with a short list of candidates, before anything is written. Assigning uses the assignee endpoint, which needs only the Assign permission.
+* **Labels** are added and removed individually, so existing labels are never overwritten.
+* **Plain-text search** becomes `text ~ "..." ORDER BY updated DESC`; a bare key like `abc-12` becomes `key = ABC-12`. Cloud uses the enhanced `/rest/api/2/search/jql` endpoint; Data Center uses `/rest/api/2/search`.
+* An unknown `issue_type` on create returns the project's valid issue types in the error.
+* **Attachments** are read from the local disk with your permissions, up to 100 MB. Files in hidden files or folders (`~/.ssh`, `~/.aws`, `.env`, `~/.config/devtools-mcp`, …) or in Windows `AppData` are refused, also through symbolic links, so a prompt-injected issue cannot talk the model into uploading credentials.
+
+Jira configuration mirrors Confluence: `Jira:BaseUrl`, `Jira:Email` (Cloud only), `Jira:ApiToken` and `Jira:DeploymentType` (`Auto` picks Cloud for `*.atlassian.net` or when an email is set). On Cloud, any path in the URL (`/jira/software/...`) is ignored; on Data Center the context path (`https://host/jira`) is kept.
+
 ## GitHub tools
 
 | Tool | Inputs | Returns |
@@ -140,6 +172,7 @@ Storage XHTML → Markdown uses `System.Xml.Linq`. Markdown → storage uses the
 | `Confluence:Email` (`Confluence__Email`) | Cloud account email; leave empty for Data Center PATs |
 | `Confluence:DeploymentType` (`Confluence__DeploymentType`) | `Auto` \| `Cloud` \| `DataCenter` |
 | `Confluence:TimeoutSeconds` | Total request timeout (default 30) |
+| `Jira:BaseUrl`, `Jira:ApiToken`, `Jira:Email`, `Jira:DeploymentType`, `Jira:TimeoutSeconds` (`Jira__…`) | Same meaning, for Jira |
 | `DevToolsMcp:Port`, else `PORT`, else 5180 | Listen port |
 | `DevToolsMcp:OpenBrowser` | `false` stops the settings page from opening on first start |
 | `DevToolsMcp:SettingsFile` | Override the per-user settings file path |
@@ -186,7 +219,7 @@ aspire run --project src/DevToolsMcp.AppHost
 
 The AppHost:
 
-* defines the parameters `confluence-url`, `confluence-email` (optional), `confluence-token` (secret) and `confluence-deployment`, and injects them as `Confluence__BaseUrl`, `Confluence__Email`, `Confluence__ApiToken` and `Confluence__DeploymentType`. Fill them in when the dashboard prompts, or with `dotnet user-secrets set Parameters:confluence-token … --project src/DevToolsMcp.AppHost`;
+* defines the parameters `confluence-url`, `confluence-email` (optional), `confluence-token` (secret) and `confluence-deployment`, and injects them as `Confluence__BaseUrl`, `Confluence__Email`, `Confluence__ApiToken` and `Confluence__DeploymentType`. The `jira-*` parameters work the same way for `Jira__*`, but are optional so they never block startup. Fill them in when the dashboard prompts, or with `dotnet user-secrets set Parameters:confluence-token … --project src/DevToolsMcp.AppHost`;
 * defines the optional parameters `github-url` and `github-token` (secret), injected as `GitHub__BaseUrl` and `GitHub__ApiToken`. They never block startup; leave them empty to configure GitHub on the settings page instead;
 * launches the **published AOT binary** through `AddExecutable` when `artifacts/publish/<current-rid>/devtools-mcp` exists. Otherwise it falls back to the project (`AddDotnetProject`);
 * exposes `http://localhost:5180` (Aspire proxy → `PORT`), marks it with `.WithMcpServer(path: "/mcp")`, adds a `/health` check, and wires OTLP so tool calls, downstream Confluence calls, latencies and payload sizes (`devtools.http.client.response.body.size`) show up in the dashboard.
@@ -205,9 +238,9 @@ To check that Aspire uses the AOT binary, publish it first and run `aspire run`.
 }
 ```
 
-## Adding a provider (Jira, …)
+## Adding a provider
 
-Create `Modules/Jira/` with options, DTOs, an adapter and tools, the same way as `Modules/Confluence/` (`ConfluenceConnection` shows how to rebuild the adapter when settings change). Then wire it up in three steps:
+Create `Modules/<Name>/` with options, DTOs, an adapter and tools, the same way as `Modules/Confluence/` and `Modules/Jira/` (`JiraConnection` shows how to rebuild the adapter when settings change). The wiring, using Jira as the example:
 
 ```csharp
 // Modules/Jira/JiraModule.cs
@@ -240,7 +273,7 @@ mcp.AddConfluenceModule(builder.Configuration, json.McpOptions);
 mcp.AddJiraModule(builder.Configuration, json.McpOptions);                                  // 3)
 ```
 
-The settings page renders the new module's form automatically. In the AppHost, uncomment `Provider.Create(builder, "jira", "Jira", …)` to get the `jira-url`, `jira-email` and `jira-token` parameters and the `Jira__*` environment variables (`Modules/GitHub` and its `Provider.Create(builder, "github", "GitHub", withEmail: false, optional: true)` line are a second, smaller example). Prefix the tool names (`jira_*`, `github_*`) so they never collide.
+The settings page renders the new module's form automatically. In the AppHost, one `Provider.Create(builder, "jira", "Jira", …)` line gives the `jira-url`, `jira-email` and `jira-token` parameters and the `Jira__*` environment variables (`Modules/GitHub` and its `Provider.Create(builder, "github", "GitHub", withEmail: false, optional: true)` line are a second, smaller example). Prefix the tool names (`jira_*`, `github_*`) so they never collide.
 
 ## License
 
