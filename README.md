@@ -11,10 +11,12 @@ A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io
 
 ## Why it is cheap on tokens
 
+See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it matters, and measurements against raw APIs and the official GitHub MCP server.
+
 | Technique | Effect |
 | --- | --- |
 | Tools of unconfigured modules are **hidden from `tools/list`** | Unused integrations add zero schema tokens |
-| Terse tool descriptions, primitive parameters | All 6 Confluence tool schemas total ≈ 2.5 KB (~630 tokens); the 6 GitHub tools ≈ 3.6 KB (~900 tokens) |
+| Terse tool descriptions, primitive parameters | All 6 Confluence tool schemas total ≈ 2.5 KB (~630 tokens); the 6 GitHub tools ≈ 3.2 KB (~800 tokens) |
 | Pages are returned as **Markdown**, not storage XHTML | Usually several times smaller than the raw body |
 | Search/children return one `id \| title \| …` line per hit | No `_links`, `_expandable`, reactions, node ids or user objects |
 | One `github_update_issue` for edit, close/reopen, labels and assignees | One schema instead of five; a single call changes several things |
