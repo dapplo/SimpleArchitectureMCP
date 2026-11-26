@@ -21,7 +21,7 @@ public class GitHubOptionsTests
     [InlineData(null, null, null, "GitHub:ApiToken not set")]
     [InlineData("t", "ftp://x", null, "GitHub:BaseUrl is not an absolute http(s) URL")]
     [InlineData("t", null, "not a repo", "GitHub:DefaultRepo must look like owner/repo")]
-    [InlineData("t", null, "dapplo/SimpleMCP", null)]
+    [InlineData("t", null, "dapplo/SimpleArchitectureMCP", null)]
     [InlineData("t", "https://ghe.corp", null, null)]
     public void Validation(string? token, string? baseUrl, string? defaultRepo, string? reason)
     {

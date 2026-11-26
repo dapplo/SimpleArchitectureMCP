@@ -59,10 +59,10 @@ public class GitHubModuleTests
     [Fact]
     public void Token_alone_activates_module_for_github_com()
     {
-        var (sp, registry) = Build(new() { ["GitHub:ApiToken"] = "ghp_x", ["GitHub:DefaultRepo"] = "dapplo/SimpleMCP" });
+        var (sp, registry) = Build(new() { ["GitHub:ApiToken"] = "ghp_x", ["GitHub:DefaultRepo"] = "dapplo/SimpleArchitectureMCP" });
         Assert.Equal(["github"], registry.ActiveModules(sp));
         var state = sp.GetRequiredService<GitHubConnection>().Current;
-        Assert.Equal("api.github.com · default dapplo/SimpleMCP", state.Message);
-        Assert.Equal("dapplo/SimpleMCP", state.Api!.DefaultRepo);
+        Assert.Equal("api.github.com · default dapplo/SimpleArchitectureMCP", state.Message);
+        Assert.Equal("dapplo/SimpleArchitectureMCP", state.Api!.DefaultRepo);
     }
 }

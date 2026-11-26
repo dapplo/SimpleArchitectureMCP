@@ -1,4 +1,4 @@
-# SimpleMCP: devtools-mcp
+# SimpleArchitectureMCP: devtools-mcp
 
 A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io) server for developer tools, built to keep LLM token usage low.
 
