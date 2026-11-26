@@ -20,13 +20,14 @@ public sealed class ConfluenceTools(ConfluenceService confluence)
         CancellationToken cancellationToken = default) =>
         Run("confluence_search", () => confluence.SearchAsync(query, space_key, limit, cancellationToken));
 
-    [McpServerTool(Name = "confluence_get_page", ReadOnly = true, Idempotent = true)]
+    [McpServerTool(Name = "confluence_get_page", ReadOnly = false, Destructive = false, Idempotent = true)]
     [Description("Get a page (id, title, version, body). Macros appear as **[Confluence Macro: name]**; to edit pages with complex macros, use format=storage here and in confluence_update_page.")]
     public Task<string> GetPage(
         string page_id,
         [Description("markdown or storage")] string format = "markdown",
+        [Description("Local .md file or folder: write the page there and return only a confirmation")] string? save_to = null,
         CancellationToken cancellationToken = default) =>
-        Run("confluence_get_page", () => confluence.GetPageAsync(page_id, format, cancellationToken));
+        Run("confluence_get_page", () => confluence.GetPageAsync(page_id, format, save_to, cancellationToken));
 
     [McpServerTool(Name = "confluence_get_page_children", ReadOnly = true, Idempotent = true)]
     [Description("List child pages as id | title.")]

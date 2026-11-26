@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using DevToolsMcp.Server.Core.Security;
 
 namespace DevToolsMcp.Server.Modules.Confluence;
 
@@ -51,15 +52,49 @@ public sealed partial class ConfluenceService
         return sb.ToString().TrimEnd();
     }
 
-    public async Task<string> GetPageAsync(string pageId, string? format, CancellationToken ct)
+    public Task<string> GetPageAsync(string pageId, string? format, CancellationToken ct) => GetPageAsync(pageId, format, null, ct);
+
+    /// <summary>
+    /// Returns the page, or with <paramref name="saveTo"/> writes it to a local file and returns only a one-line
+    /// confirmation, so the body never enters the conversation.
+    /// </summary>
+    public async Task<string> GetPageAsync(string pageId, string? format, string? saveTo, CancellationToken ct)
     {
         var storage = IsStorage(format);
-        var page = await Api.GetPageAsync(ValidateId(pageId), includeBody: true, ct).ConfigureAwait(false);
+        var save = string.IsNullOrWhiteSpace(saveTo) ? null : saveTo;
+        var id = ValidateId(pageId);
+        var page = await Api.GetPageAsync(id, includeBody: true, ct).ConfigureAwait(false);
+        var extensions = storage ? StorageExtensions : MarkdownExtensions;
+        // Validate after fetching: the default file name comes from the title.
+        var file = save is null ? null : LocalSavePath.Validate(save, LocalSavePath.FileName(page.Title, extensions[0]), extensions);
         var body = page.StorageBody ?? string.Empty;
         var header = $"---\nid: {page.Id}\ntitle: {page.Title}\nversion: {page.Version}\n---\n";
         // The Markdown is appended to the header directly: large pages are not copied once more.
-        return storage ? header + body : ConfluenceMarkupConverter.ToMarkdown(body, new StringBuilder(header)).ToString();
+        var content = storage ? new StringBuilder(header).Append(body) : ConfluenceMarkupConverter.ToMarkdown(body, new StringBuilder(header));
+        if (file is null)
+        {
+            return content.ToString();
+        }
+
+        try
+        {
+            file.Directory?.Create();
+            await using (var writer = new StreamWriter(file.FullName, append: false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
+            {
+                await writer.WriteAsync(content, ct).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new ArgumentException($"Could not write {file.FullName}: {ex.Message}", ex);
+        }
+
+        file.Refresh();
+        return $"Saved {page.Id} '{page.Title}' v{page.Version} to {file.FullName} ({Math.Max(1, file.Length / 1024)} KB).";
     }
+
+    private static readonly string[] MarkdownExtensions = [".md", ".markdown", ".txt"];
+    private static readonly string[] StorageExtensions = [".xhtml", ".html", ".xml", ".txt"];
 
     public async Task<string> GetChildrenAsync(string pageId, int limit, CancellationToken ct)
     {
