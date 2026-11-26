@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
+using DevToolsMcp.Server.Core.Markdown;
 
 namespace DevToolsMcp.Server.Modules.Confluence;
 
@@ -577,7 +578,7 @@ public static partial class ConfluenceMarkupConverter
     /// <summary>Escapes characters that would otherwise be parsed as Markdown syntax.</summary>
     internal static string EscapeMarkdown(string text)
     {
-        if (text.AsSpan().IndexOfAny("\\*_`[<~|") < 0)
+        if (text.AsSpan().IndexOfAny("\\*_`[<~|&") < 0)
         {
             return text;
         }
@@ -593,6 +594,7 @@ public static partial class ConfluenceMarkupConverter
                 '[' => text.IndexOf(']', i) > 0,
                 '<' => i + 1 < text.Length && (char.IsAsciiLetter(text[i + 1]) || text[i + 1] == '/'),
                 '~' => i + 1 < text.Length && text[i + 1] == '~',
+                '&' => HtmlEntities.StartsReference(text, i), // literal "&auml;" stays literal
                 _ => false,
             };
             if (escape)
