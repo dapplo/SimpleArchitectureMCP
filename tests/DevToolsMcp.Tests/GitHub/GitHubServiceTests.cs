@@ -218,6 +218,9 @@ public class GitHubServiceTests
         var ex = await Assert.ThrowsAsync<ArgumentException>(() => svc.ListLabelsAsync(null, Ct));
         Assert.Contains("repo is required", ex.Message);
         Assert.Throws<ArgumentException>(() => GitHubService.ValidateRepo("../etc"));
+        Assert.Throws<ArgumentException>(() => GitHubService.ValidateRepo("owner/.."));
+        Assert.Throws<ArgumentException>(() => GitHubService.ValidateRepo("owner/."));
+        Assert.Equal("owner/.github", GitHubService.ValidateRepo("owner/.github"));
     }
 
     [Fact]

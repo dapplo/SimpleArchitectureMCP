@@ -186,6 +186,63 @@ public sealed class MigrationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Resumed_GitHub_to_Jira_issue_skips_attachments_that_are_already_there()
+    {
+        var (svc, jira, gh) = Create();
+        gh.On("GET", "/repos/o/r/issues/5", """
+            {"id":5000,"number":5,"title":"Crash on save","state":"open","body":"![screen](https://github.com/user-attachments/assets/abc-123)",
+             "user":{"login":"bob"},"comments":0,"html_url":"https://github.com/o/r/issues/5"}
+            """);
+        gh.On("GET", "/user-attachments/assets/abc-123", "PNG", mediaType: "image/png");
+        jira.On("GET", $"/rest/api/2/issue/OPS-9?fields={Fields}", """{"key":"OPS-9","fields":{"attachment":[{"filename":"abc-123.png","size":3}]}}""");
+        File.WriteAllText(MapFile, """
+            {"issues":{"github:github.com/o/r#5 -> jira:acme.atlassian.net/OPS":{"target":"OPS-9","url":"https://acme.atlassian.net/browse/OPS-9"}}}
+            """);
+
+        var result = await svc.MigrateAsync("OPS", ["#5"], null, null, 10, false, Ct);
+
+        Assert.StartsWith("o/r#5 → OPS-9", result);
+        Assert.DoesNotContain(jira.Requests, r => r.PathAndQuery.EndsWith("/attachments", StringComparison.Ordinal));
+        Assert.DoesNotContain(jira.Requests, r => r is { Method.Method: "POST", PathAndQuery: "/rest/api/2/issue" });
+    }
+
+    [Fact]
+    public void Map_writers_sharing_a_file_keep_each_others_records()
+    {
+        var first = MigrationMap.Load(MapFile);
+        var second = MigrationMap.Load(MapFile); // e.g. the stdio and the HTTP instance
+
+        first.Set("a -> x", new MigrationRecord { Target = "o/r#1" });
+        second.Set("b -> x", new MigrationRecord { Target = "o/r#2" });
+
+        var reloaded = MigrationMap.Load(MapFile);
+        Assert.Equal("o/r#1", reloaded.Get("a -> x")?.Target);
+        Assert.Equal("o/r#2", reloaded.Get("b -> x")?.Target);
+        Assert.Single(Directory.GetFiles(_dir)); // no temp files left behind
+    }
+
+    [Fact]
+    public void Relative_map_file_is_kept_next_to_the_settings_not_in_the_working_directory()
+    {
+        var settingsDir = Path.Combine(_dir, "cfg");
+        var defaultMap = Path.Combine(settingsDir, "migration-map.json");
+
+        Assert.Equal(defaultMap, MigrationService.MapPath(null, defaultMap));
+        Assert.Equal(Path.Combine(settingsDir, "acme", "map.json"), MigrationService.MapPath(Path.Combine("acme", "map.json"), defaultMap));
+        var absolute = Path.Combine(_dir, "elsewhere.json");
+        Assert.Equal(absolute, MigrationService.MapPath(absolute, defaultMap));
+    }
+
+    [Theory]
+    [InlineData("https://github.com/user-attachments/assets/abc-123", true)]
+    [InlineData("https://github.com/o/r/assets/12345/0a1b2c3d-1111-2222-3333-444455556666", true)]
+    [InlineData("https://github.com/o/r/blob/main/assets/logo.png", false)]   // a page in the repository
+    [InlineData("https://github.com/o/r/tree/main/docs/assets/x", false)]
+    [InlineData("https://user-images.githubusercontent.com/1/2.png", true)]
+    public void Only_uploaded_files_count_as_GitHub_attachments(string url, bool attachment) =>
+        Assert.Equal(attachment, MigrationText.GitHubAssets($"see {url} here", "github.com").Any());
+
+    [Fact]
     public async Task Pull_requests_are_skipped()
     {
         var (svc, _, gh) = Create();

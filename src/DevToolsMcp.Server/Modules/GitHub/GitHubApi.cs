@@ -97,12 +97,8 @@ public sealed class GitHubApi(IHttpClientFactory httpClientFactory, GitHubOption
             throw new GitHubApiException(response.StatusCode, $"Download {(int)response.StatusCode}: {url}");
         }
 
-        if (response.Content.Headers.ContentLength > maxBytes)
-        {
-            throw new GitHubApiException(HttpStatusCode.RequestEntityTooLarge, $"Attachment larger than {maxBytes / (1024 * 1024)} MB: {url}");
-        }
-
-        var data = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        var data = await Core.Http.BoundedContent.ReadAsBytesAsync(response.Content, maxBytes,
+            () => new GitHubApiException(HttpStatusCode.RequestEntityTooLarge, $"Attachment larger than {maxBytes / (1024 * 1024)} MB: {url}"), ct).ConfigureAwait(false);
         var name = response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
         return new GhDownload(data, response.Content.Headers.ContentType?.MediaType, name);
     }

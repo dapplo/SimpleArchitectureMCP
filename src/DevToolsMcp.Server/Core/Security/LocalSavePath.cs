@@ -34,30 +34,9 @@ public static class LocalSavePath
             throw new ArgumentException($"{parameter} must end in {string.Join(", ", extensions)}.");
         }
 
-        // Check the path itself, the file's link target and the link target of every existing parent folder.
-        var candidates = new List<string> { file.FullName };
-        if (file.Exists && file.ResolveLinkTarget(returnFinalTarget: true) is { } fileTarget)
-        {
-            candidates.Add(Path.GetFullPath(fileTarget.FullName));
-        }
-
-        // Drive and file-system roots are never links, and Windows can't resolve a link target for "D:\\".
-        for (var dir = file.Directory; dir?.Parent is not null; dir = dir.Parent)
-        {
-            if (dir.Exists && dir.ResolveLinkTarget(returnFinalTarget: true) is { } dirTarget)
-            {
-                candidates.Add(Path.GetFullPath(dirTarget.FullName));
-            }
-        }
-
-        foreach (var candidate in candidates)
-        {
-            var segments = candidate.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Any(s => s.StartsWith('.') || s.Equals("AppData", StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new ArgumentException($"Refusing to write {file.FullName}: hidden and application-data folders are off limits.");
-            }
-        }
+        // The path itself and its real path (links followed in every folder along the way).
+        PathGuard.EnsureOrdinary(file.FullName, [], () =>
+            new ArgumentException($"Refusing to write {file.FullName}: hidden and application-data folders are off limits."));
 
         return file;
     }

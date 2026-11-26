@@ -45,9 +45,10 @@ public abstract class JiraAdapterBase(IHttpClientFactory httpClientFactory, Uri 
     public async Task<byte[]> DownloadAsync(string url, long maxBytes, CancellationToken ct)
     {
         var uri = new Uri(SiteBase, url);
-        if (!string.Equals(uri.Host, SiteBase.Host, StringComparison.OrdinalIgnoreCase))
+        // Same scheme, host and port as the site: an http:// link on an https site would send the credentials in clear text.
+        if (Uri.Compare(uri, SiteBase, UriComponents.SchemeAndServer, UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) != 0)
         {
-            throw new JiraApiException(HttpStatusCode.BadRequest, $"Refusing to send Jira credentials to {uri.Host}.");
+            throw new JiraApiException(HttpStatusCode.BadRequest, $"Refusing to send Jira credentials to {uri.GetLeftPart(UriPartial.Authority)}.");
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
@@ -58,12 +59,8 @@ public abstract class JiraAdapterBase(IHttpClientFactory httpClientFactory, Uri 
             throw await CreateErrorAsync(response, ct).ConfigureAwait(false);
         }
 
-        if (response.Content.Headers.ContentLength > maxBytes)
-        {
-            throw new JiraApiException(HttpStatusCode.RequestEntityTooLarge, $"Attachment larger than {maxBytes / (1024 * 1024)} MB.");
-        }
-
-        return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        return await Core.Http.BoundedContent.ReadAsBytesAsync(response.Content, maxBytes,
+            () => new JiraApiException(HttpStatusCode.RequestEntityTooLarge, $"Attachment larger than {maxBytes / (1024 * 1024)} MB."), ct).ConfigureAwait(false);
     }
 
     public Task<JiraCreated> CreateIssueAsync(JiraCreateFields fields, CancellationToken ct) =>

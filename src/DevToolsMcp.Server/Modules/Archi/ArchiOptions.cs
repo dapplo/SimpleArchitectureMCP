@@ -103,22 +103,15 @@ internal static class ArchiPaths
     public static string ValidateOutput(string path, string trustedRoot, params string[] extensions)
     {
         var full = Path.GetFullPath(ExpandHome(path.Trim()));
-        var root = Path.TrimEndingDirectorySeparator(trustedRoot) + Path.DirectorySeparatorChar;
         if (extensions.Length > 0 && !extensions.Contains(Path.GetExtension(full), StringComparer.OrdinalIgnoreCase))
         {
             throw new ArgumentException($"{full}: expected a {string.Join(" or ", extensions)} file.");
         }
 
-        if (full.StartsWith(root, OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase))
-        {
-            return full; // the configured output folder may itself live in AppData (Windows %TEMP%)
-        }
-
-        var segments = full.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Any(s => s.StartsWith('.') || s.Equals("AppData", StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new ArgumentException($"Refusing to write {full}: hidden and application-data folders are off limits.");
-        }
+        // The configured output folder may itself live in AppData (Windows %TEMP%). Links are followed, so a folder
+        // that points into ~/.ssh is refused like ~/.ssh itself.
+        Core.Security.PathGuard.EnsureOrdinary(full, [trustedRoot], () =>
+            new ArgumentException($"Refusing to write {full}: hidden and application-data folders are off limits."));
 
         return full;
     }

@@ -24,6 +24,7 @@ public sealed partial class MigrationService
     private readonly Func<MigrationOptions> _options;
     private readonly string _defaultMapFile;
     private DateTimeOffset _lastGitHubWrite = DateTimeOffset.MinValue;
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     public MigrationService(Func<IJiraApiAdapter> jira, JiraService jiraService, Func<GitHubApi> github, Func<MigrationOptions> options, string defaultMapFile)
     {
@@ -57,13 +58,43 @@ public sealed partial class MigrationService
         }
 
         var options = _options();
-        var run = new Run(options, MigrationMap.Load(string.IsNullOrWhiteSpace(options.MapFile) ? _defaultMapFile : Path.GetFullPath(options.MapFile.Trim())),
-            options.Users(), dryRun);
         var take = Math.Clamp(limit, 1, MaxBatch);
 
-        return t.Contains('/', StringComparison.Ordinal)
-            ? await ToGitHubAsync(run, GitHubService.ValidateRepo(t), list, query, cursor, take, ct).ConfigureAwait(false)
-            : await ToJiraAsync(run, JiraService.ValidateProjectKey(t), list, query, cursor, take, ct).ConfigureAwait(false);
+        // One migration at a time, and the map is read once the previous one is done: two calls copying the same
+        // issue would otherwise both create it before either records it.
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var run = new Run(options, MigrationMap.Load(MapPath(options.MapFile, _defaultMapFile)), options.Users(), dryRun);
+            return t.Contains('/', StringComparison.Ordinal)
+                ? await ToGitHubAsync(run, GitHubService.ValidateRepo(t), list, query, cursor, take, ct).ConfigureAwait(false)
+                : await ToJiraAsync(run, JiraService.ValidateProjectKey(t), list, query, cursor, take, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The map file: the default next to settings.json, or the configured one. A relative path is taken relative to
+    /// the settings folder, not the working directory, which differs between a stdio start by the MCP client and a
+    /// double-click; otherwise a resumed run would not find the record and would create every issue again.
+    /// </summary>
+    internal static string MapPath(string? configured, string defaultMapFile)
+    {
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return defaultMapFile;
+        }
+
+        var p = configured.Trim().Trim('"');
+        if (p.StartsWith('~'))
+        {
+            p = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + p[1..];
+        }
+
+        return Path.GetFullPath(p, Path.GetDirectoryName(Path.GetFullPath(defaultMapFile))!);
     }
 
     private sealed class Run(MigrationOptions options, MigrationMap map, UserMap users, bool dryRun)
@@ -561,6 +592,7 @@ public sealed partial class MigrationService
 
         var names = files.ToDictionary(f => f.Url, f => f.Name, StringComparer.Ordinal);
 
+        var resumed = record is not null;
         if (record is null)
         {
             var fields = new JiraCreateFields
@@ -604,7 +636,12 @@ public sealed partial class MigrationService
         var key = record.Target!;
         if (!record.Attachments)
         {
-            foreach (var file in files)
+            // A resumed issue may already have some of the files (the earlier run stopped part way): skip those.
+            var existing = resumed
+                ? ((await jira.GetIssueAsync(key, ct).ConfigureAwait(false)).Fields?.Attachment ?? [])
+                    .Select(a => a.Filename).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : [];
+            foreach (var file in files.Where(f => !existing.Contains(f.Name)))
             {
                 await jira.AttachAsync(key, file.Name, new MemoryStream(file.Data, writable: false), ct).ConfigureAwait(false);
             }
