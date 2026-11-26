@@ -101,9 +101,10 @@ public static class SettingsEndpoints
             {
                 return Results.Ok(new ResultView(true, await test(sp, ct)));
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                return Results.Ok(new ResultView(false, ex.Message));
+                // Same wording as the tools (timeouts, login pages instead of JSON, ...); a person may see the rest.
+                return Results.Ok(new ResultView(false, Tools.ToolErrors.Describe(ex, module.Title, ct) ?? ex.Message));
             }
         });
 
@@ -170,9 +171,9 @@ public static class SettingsEndpoints
             var result = await conversion.Run(sp, new ConversionInput(text, path), ct).ConfigureAwait(false);
             return Results.File(result.Content, result.ContentType, result.FileName);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            return Results.BadRequest(new ResultView(false, ex.Message));
+            return Results.BadRequest(new ResultView(false, Tools.ToolErrors.Describe(ex, module.Title, ct) ?? ex.Message));
         }
         finally
         {

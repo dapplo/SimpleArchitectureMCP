@@ -129,9 +129,10 @@ public sealed partial class MigrationService
                     .Append("Stopped: rate limited. Run the same call again later; finished steps are skipped.");
                 return sb.ToString().TrimEnd();
             }
-            catch (Exception ex) when (ex is JiraApiException or GitHubApiException or ArgumentException or HttpRequestException or TimeoutException)
+            catch (Exception ex) when (Core.Tools.ToolErrors.Describe(ex, "Jira or GitHub", ct) is { } error)
             {
-                sb.Append(source).Append(" ✗ ").Append(ex.Message).Append('\n');
+                // One failed issue (a timeout, a refused write, ...) doesn't stop the batch.
+                sb.Append(source).Append(" ✗ ").Append(error).Append('\n');
             }
         }
 

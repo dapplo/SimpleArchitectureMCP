@@ -226,7 +226,7 @@ public sealed partial class ArchiService : IDisposable
     {
         if (string.IsNullOrWhiteSpace(model))
         {
-            throw new ArgumentException("model (path to a .archimate or exchange .xml file) is required.");
+            throw new ArgumentException("file (path to a .archimate or exchange .xml file) is required.");
         }
 
         var full = Path.GetFullPath(ArchiPaths.ExpandHome(model.Trim().Trim('"')));
@@ -360,7 +360,7 @@ public sealed partial class ArchiService : IDisposable
     }
 }
 
-public class ArchiException(string message) : InvalidOperationException(message);
+public class ArchiException(string message) : InvalidOperationException(message), Core.Tools.IToolError;
 
 public sealed class ArchiNotConfiguredException(string reason)
     : ArchiException($"Archi is not configured ({reason}). Open the devtools-mcp settings page.");

@@ -9,7 +9,7 @@ namespace DevToolsMcp.Server.Modules.GitHub;
 /// <param name="FileName">From Content-Disposition, when the server sends one.</param>
 public sealed record GhDownload(byte[] Data, string? MediaType, string? FileName);
 
-public sealed class GitHubApiException(HttpStatusCode status, string message) : Exception(message)
+public sealed class GitHubApiException(HttpStatusCode status, string message) : Exception(message), Core.Tools.IToolError
 {
     public HttpStatusCode Status { get; } = status;
 }

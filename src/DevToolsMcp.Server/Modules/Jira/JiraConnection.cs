@@ -46,4 +46,4 @@ public sealed class JiraConnection : IDisposable
 }
 
 public sealed class JiraNotConfiguredException(string reason)
-    : InvalidOperationException($"Jira is not configured ({reason}). Open the devtools-mcp settings page.");
+    : InvalidOperationException($"Jira is not configured ({reason}). Open the devtools-mcp settings page."), Core.Tools.IToolError;

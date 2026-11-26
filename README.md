@@ -3,7 +3,7 @@
 A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io) server for developer tools, built to keep LLM token usage low.
 
 * **.NET 11**, `WebApplication.CreateSlimBuilder`, official `ModelContextProtocol.AspNetCore` SDK over **Streamable HTTP** (`/mcp`), or **stdio** with `--stdio` so clients can start it themselves
-* Published as a **single-file, self-contained Native AOT** executable (~24 MB, about 60–80 ms from launch to healthy)
+* Published as a **single-file, self-contained Native AOT** executable (~28 MB on linux-x64, `/health` answers about 0.1 s after launch)
 * **Double-click to run**: a built-in settings page (`http://localhost:5180/`) opens on first start; paste your URL and token and the tools switch on without a restart
 * Optional **Aspire 17** AppHost for development, with OpenTelemetry traces, metrics and logs in the Aspire dashboard
 * Integrations: **Atlassian Confluence** and **Jira** (Cloud and Data Center / Server), **GitHub issues** (github.com and GitHub Enterprise) and **ArchiMate diagrams** (PNG export with a local [Archi](https://www.archimatetool.com) install, Open Exchange Format from compact JSON, draw.io diagrams on Confluence pages)
@@ -23,7 +23,7 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 | Technique | Effect |
 | --- | --- |
 | Tools of unconfigured modules are **hidden from `tools/list`** | Unused integrations add zero schema tokens |
-| Terse tool descriptions, primitive parameters | All 7 Confluence tool schemas total ≈ 3.2 KB (~800 tokens); the 7 Jira tools ≈ 3.1 KB (~780 tokens); the 6 GitHub tools ≈ 3.2 KB (~800 tokens); the 3 Archi tools ≈ 4 KB (~1000 tokens) |
+| Terse tool descriptions, primitive parameters | All 8 Confluence tool schemas total ≈ 3.4 KB (~840 tokens); the 7 Jira tools ≈ 3.2 KB (~800 tokens); the 6 GitHub tools ≈ 3.3 KB (~810 tokens); the 3 Archi tools ≈ 3.9 KB (~970 tokens); `migrate_issues` ≈ 1 KB (~250 tokens) |
 | Jira issues are returned as front matter + **Markdown**, with only the fields that matter | No custom fields, avatars, `self` links or changelog |
 | Pages are returned as **Markdown**, not storage XHTML | Usually several times smaller than the raw body |
 | Search/children return one `id \| title \| …` line per hit | No `_links`, `_expandable`, reactions, node ids or user objects |
@@ -32,6 +32,7 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 | `archi_create_model` takes ids + types + names; layout is automatic | No coordinates, styles or XML in the prompt |
 | `confluence_append_to_page` | Adds content without the model re-sending the whole page |
 | Automatic version handling | No failed calls and retries for version conflicts |
+| One short error sentence per failure | Timeouts, unreachable hosts, login pages instead of JSON and API errors all say what to do next; no stack traces |
 | `devtools.mcp.tool.output.size` metric | See exactly how many characters each tool returns |
 
 ## Quick start (no SDK needed)
@@ -69,6 +70,7 @@ src/
       Json/                      DevToolsJson: combines module JsonSerializerContexts (TypeInfoResolverChain)
       Markdown/                  Shared Markdown parser (AST) used by provider emitters
       Modules/                   ModuleRegistry (enabled/disabled modules, /health)
+      Tools/                     ToolErrors: one error policy for every tool (short messages, no stack traces)
       Security/                  Loopback-only Kestrel binding, optional API key
       Telemetry/                 OpenTelemetry setup, custom metrics
     Modules/Confluence/          The Confluence vertical slice
@@ -80,7 +82,7 @@ src/
       ConfluenceJsonContext.cs   Source-generated DTOs
       ConfluenceMarkupConverter*.cs   Storage XHTML <-> Markdown
       ConfluenceService.cs       Versioning, validation, compact output
-      ConfluenceTools.cs         The 7 MCP tools
+      ConfluenceTools.cs         The 8 MCP tools
       DrawioMacro.cs             The draw.io app's macro in storage format
     Modules/Jira/                The Jira vertical slice (same shape: options, connection, adapters, service, tools)
       JiraAdapterBase.cs         REST API v2 on Cloud and Data Center
@@ -117,6 +119,7 @@ tests/DevToolsMcp.Tests/         xUnit v3 tests, grouped by slice
 | --- | --- | --- |
 | `confluence_search` | `query` (CQL or plain text), `space_key?`, `limit` (10, max 25) | `id \| title \| space \| yyyy-MM-dd` + excerpt per hit |
 | `confluence_get_page` | `page_id`, `format` (`markdown` \| `storage`) | Front matter (`id`, `title`, `version`) + body |
+| `confluence_export_page` | `page_id`, `save_to` (`.md` file or folder), `format`, `overwrite` (false: a file that is not an earlier export is kept) | `Saved <id> '<title>' v<n> to <path> (<n> KB).` (the body stays out of the conversation) |
 | `confluence_get_page_children` | `page_id`, `limit` (25) | `id \| title` per child |
 | `confluence_create_page` | `space_key`, `title`, `markdown_body`, `parent_id?` | `Created <id> \| <title> \| <url>` |
 | `confluence_update_page` | `page_id`, `markdown_body`, `title?`, `format`, `version_message?` | `Updated <id> to version <n>.` |
@@ -198,7 +201,7 @@ Jira configuration mirrors Confluence: `Jira:BaseUrl`, `Jira:Email` (Cloud only)
 | `GitHub:ApiToken` (`GitHub__ApiToken`) | Required to enable the module: personal access token (classic or fine-grained) |
 | `GitHub:BaseUrl` (`GitHub__BaseUrl`) | Empty for github.com. GitHub Enterprise Server: `https://github.example.com` (`/api/v3` is added). Enterprise Cloud with data residency: `https://SUBDOMAIN.ghe.com` |
 | `GitHub:DefaultRepo` (`GitHub__DefaultRepo`) | Optional `owner/repo` used when a call omits `repo` |
-| `GitHub:TimeoutSeconds` | Total request timeout (default 30) |
+| `GitHub:TimeoutSeconds` | Total request timeout (default 30; read at start-up) |
 
 ## Migration tool
 
@@ -298,9 +301,7 @@ The settings page shows the first three; scale, margin and timeout are set in `a
 | `Confluence:Email` (`Confluence__Email`) | Cloud account email; leave empty for Data Center PATs |
 | `Confluence:DeploymentType` (`Confluence__DeploymentType`) | `Auto` \| `Cloud` \| `DataCenter` |
 | `Confluence:DiagramApps` (`Confluence__DiagramApps`) | Diagram apps on this Confluence: `auto` (default: detected), `none`, or a list of `drawio`, `plantuml`, `mermaid`. Tools that need a missing app (today `confluence_add_drawio`) are hidden from `tools/list`, so the agent only sees what the site supports. |
-| `Confluence:TimeoutSeconds` | Total request timeout (default 30) |
-
-**Diagram app detection.** With `auto`, the first `tools/list` (or **Test connection**) renders each app's macro through the v1 `contentbody/convert/view` endpoint, which every user may call on Cloud and Data Center (the plugin APIs are admin-only). A macro that renders like a made-up control macro, or as "Unknown macro", is missing. The result is cached until the settings change; if detection fails (offline, timeout) the tools stay listed and the real call reports the problem. Macro names probed: `drawio`; `plantuml`, `plantumlcloud`; `mermaid`, `mermaid-cloud`, `mermaid-macro`. **Test connection** shows what was found.
+| `Confluence:TimeoutSeconds` | Total request timeout (default 30; read at start-up, so restart after changing it) |
 | `Jira:BaseUrl`, `Jira:ApiToken`, `Jira:Email`, `Jira:DeploymentType`, `Jira:TimeoutSeconds` (`Jira__…`) | Same meaning, for Jira |
 | `--stdio` (command-line switch) | MCP over stdin/stdout for clients that start the server themselves. The settings page and `/health` stay on HTTP; logs go to stderr. If the port is taken, the instance keeps serving stdio and watches `settings.json` for changes made on the other instance's page |
 | `DevToolsMcp:Port`, else `PORT`, else 5180 | Listen port |
@@ -309,6 +310,8 @@ The settings page shows the first three; scale, margin and timeout are set in `a
 | `DevToolsMcp:AllowRemote` | `true` binds all interfaces and requires `McpAuth:ApiKey` (the server refuses to start without one). Default: loopback only (`127.0.0.1` and `::1`) |
 | `McpAuth:ApiKey` (`McpAuth__ApiKey`) | If set, `/mcp` requires `Authorization: Bearer <key>` or `X-API-Key` (`/health` stays open) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Enables OTLP export (Aspire sets it automatically) |
+
+**Diagram app detection.** With `auto`, the first `tools/list` (or **Test connection**) renders each app's macro through the v1 `contentbody/convert/view` endpoint, which every user may call on Cloud and Data Center (the plugin APIs are admin-only). A macro that renders like a made-up control macro, or as "Unknown macro", is missing. The result is cached until the settings change; if detection fails (offline, timeout) the tools stay listed and the real call reports the problem. Macro names probed: `drawio`; `plantuml`, `plantumlcloud`; `mermaid`, `mermaid-cloud`, `mermaid-macro`. **Test connection** shows what was found.
 
 The server binds to loopback only by default, so the unauthenticated endpoint is never exposed on external interfaces. The settings API additionally rejects non-loopback `Host` headers (DNS rebinding) and cross-origin requests, never returns stored tokens, and requires the token to be re-entered when the URL changes, so a malicious web page cannot redirect your credentials.
 

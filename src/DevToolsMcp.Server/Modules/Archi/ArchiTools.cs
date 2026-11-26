@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using System.Text;
-using DevToolsMcp.Server.Core.Telemetry;
+using DevToolsMcp.Server.Core.Tools;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -14,9 +14,10 @@ namespace DevToolsMcp.Server.Modules.Archi;
 [McpServerToolType]
 public sealed class ArchiTools(ArchiService archi)
 {
+    private const string Service = "Archi";
     private const int MaxInlineImages = 4;
 
-    [McpServerTool(Name = "archi_render", ReadOnly = true, Idempotent = true)]
+    [McpServerTool(Name = "archi_render", Destructive = false, Idempotent = true)] // writes PNG files, so not read-only
     [Description("Render ArchiMate views of a .archimate or Open Exchange .xml file to PNG with Archi. Lines: view | png path | WxH.")]
     public Task<CallToolResult> Render(
         [Description("Path to .archimate or exchange .xml")] string file,
@@ -24,11 +25,11 @@ public sealed class ArchiTools(ArchiService archi)
         [Description("Output folder; default the configured one")] string? out_dir = null,
         [Description("Also return the images (costly)")] bool inline = false,
         CancellationToken cancellationToken = default) =>
-        Run("archi_render", async () =>
+        ToolErrors.RunAsync("archi_render", Service, async () =>
         {
             var rendered = await archi.RenderAsync(file, views, out_dir, cancellationToken).ConfigureAwait(false);
             return await Result(new StringBuilder(), rendered, inline, cancellationToken).ConfigureAwait(false);
-        });
+        }, cancellationToken);
 
     [McpServerTool(Name = "archi_create_model")]
     [Description("Write an ArchiMate Open Exchange .xml from JSON; layout is automatic unless x/y are given. Optionally renders it to PNG.")]
@@ -39,7 +40,7 @@ public sealed class ArchiTools(ArchiService archi)
         [Description("Also return the images (costly)")] bool inline = false,
         [Description("Replace an existing file that is not an exchange model")] bool overwrite = false,
         CancellationToken cancellationToken = default) =>
-        Run("archi_create_model", async () =>
+        ToolErrors.RunAsync("archi_create_model", Service, async () =>
         {
             var (file, summary) = await archi.CreateModelAsync(model, path, overwrite, cancellationToken).ConfigureAwait(false);
             var text = new StringBuilder().Append(file).Append(" (").Append(summary).Append(')').AppendLine();
@@ -50,7 +51,7 @@ public sealed class ArchiTools(ArchiService archi)
 
             var rendered = await archi.RenderAsync(file, null, null, cancellationToken).ConfigureAwait(false);
             return await Result(text, rendered, inline, cancellationToken).ConfigureAwait(false);
-        });
+        }, cancellationToken);
 
     [McpServerTool(Name = "archi_to_drawio")]
     [Description("Convert ArchiMate views to a draw.io file (one page per view, ArchiMate 3 shapes), e.g. for Confluence's draw.io app.")]
@@ -60,11 +61,11 @@ public sealed class ArchiTools(ArchiService archi)
         [Description(".drawio path; default the output folder")] string? path = null,
         [Description("Replace an existing file that is not a draw.io file")] bool overwrite = false,
         CancellationToken cancellationToken = default) =>
-        Run("archi_to_drawio", async () =>
+        ToolErrors.RunAsync("archi_to_drawio", Service, async () =>
         {
             var (drawio, pages) = await archi.ToDrawioAsync(file, views, path, overwrite, cancellationToken).ConfigureAwait(false);
             return new CallToolResult { Content = [new TextContentBlock { Text = $"{drawio} (pages: {string.Join(", ", pages)})" }] };
-        });
+        }, cancellationToken);
 
     private static async Task<CallToolResult> Result(StringBuilder text, IReadOnlyList<ArchiService.RenderedView> rendered, bool inline,
         CancellationToken cancellationToken)
@@ -85,21 +86,5 @@ public sealed class ArchiTools(ArchiService archi)
         }
 
         return new CallToolResult { Content = content };
-    }
-
-    /// <summary>Maps failures to concise MCP tool errors and records the text output size.</summary>
-    private static async Task<CallToolResult> Run(string tool, Func<Task<CallToolResult>> action)
-    {
-        try
-        {
-            var result = await action().ConfigureAwait(false);
-            DevToolsTelemetry.Output(tool, ((TextContentBlock)result.Content[0]).Text);
-            return result;
-        }
-        catch (Exception ex) when (ex is ArchiException or ArgumentException or IOException or UnauthorizedAccessException or TimeoutException
-                                       or System.Xml.XmlException)
-        {
-            throw new McpException(ex.Message, ex);
-        }
     }
 }

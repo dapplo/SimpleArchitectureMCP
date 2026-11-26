@@ -48,4 +48,4 @@ public sealed class ConfluenceConnection : IDisposable
 }
 
 public sealed class ConfluenceNotConfiguredException(string reason)
-    : InvalidOperationException($"Confluence is not configured ({reason}). Open the devtools-mcp settings page.");
+    : InvalidOperationException($"Confluence is not configured ({reason}). Open the devtools-mcp settings page."), Core.Tools.IToolError;

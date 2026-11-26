@@ -54,7 +54,7 @@ public interface IJiraApiAdapter
     Task<JiraProject> GetProjectAsync(string projectKey, CancellationToken ct);
 }
 
-public sealed class JiraApiException(HttpStatusCode status, string message) : Exception(message)
+public sealed class JiraApiException(HttpStatusCode status, string message) : Exception(message), Core.Tools.IToolError
 {
     public HttpStatusCode Status { get; } = status;
 }

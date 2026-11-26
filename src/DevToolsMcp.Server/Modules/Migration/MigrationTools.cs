@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using DevToolsMcp.Server.Core.Telemetry;
+using DevToolsMcp.Server.Core.Tools;
 using DevToolsMcp.Server.Modules.GitHub;
 using DevToolsMcp.Server.Modules.Jira;
 using ModelContextProtocol;
@@ -24,18 +24,6 @@ public sealed class MigrationTools(MigrationService migration)
         [Description("Issues per call, max 25")] int limit = 10,
         [Description("Only show what would be created")] bool dry_run = false,
         CancellationToken cancellationToken = default) =>
-        Run(() => migration.MigrateAsync(target, issues, query, cursor, limit, dry_run, cancellationToken));
-
-    private static async Task<string> Run(Func<Task<string>> action)
-    {
-        try
-        {
-            return DevToolsTelemetry.Output("migrate_issues", await action().ConfigureAwait(false));
-        }
-        catch (Exception ex) when (ex is JiraApiException or GitHubApiException or JiraNotConfiguredException or GitHubNotConfiguredException
-                                       or ArgumentException or HttpRequestException or TimeoutException or IOException or UnauthorizedAccessException)
-        {
-            throw new McpException(ex.Message, ex);
-        }
-    }
+        ToolErrors.RunAsync("migrate_issues", "Jira or GitHub", () => migration.MigrateAsync(target, issues, query, cursor, limit, dry_run, cancellationToken),
+            cancellationToken);
 }
