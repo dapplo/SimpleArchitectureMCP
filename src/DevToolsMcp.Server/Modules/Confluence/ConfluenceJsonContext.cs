@@ -182,6 +182,7 @@ public sealed class ConfluenceError
 [JsonSerializable(typeof(V2SpaceList))]
 [JsonSerializable(typeof(V2CreatePageRequest))]
 [JsonSerializable(typeof(V2UpdatePageRequest))]
+[JsonSerializable(typeof(StorageValue))]
 [JsonSerializable(typeof(V1Content))]
 [JsonSerializable(typeof(V1ContentList))]
 [JsonSerializable(typeof(V1SearchResponse))]

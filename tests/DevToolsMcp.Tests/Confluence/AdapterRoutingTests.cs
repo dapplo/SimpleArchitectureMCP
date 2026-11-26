@@ -102,4 +102,19 @@ public class AdapterRoutingTests
         var ex = await Assert.ThrowsAsync<ConfluenceApiException>(() => api.GetPageAsync("1", includeBody: false, Ct));
         Assert.Equal("Confluence API 404: Page 1 does not exist", ex.Message);
     }
+    [Theory]
+    [InlineData("https://acme.atlassian.net/wiki", "a@b.c", "/wiki/rest/api/content/42/child/attachment")]
+    [InlineData("https://wiki.corp/confluence", null, "/confluence/rest/api/content/42/child/attachment")]
+    public async Task Attachments_use_the_v1_create_or_update_endpoint(string baseUrl, string? email, string path)
+    {
+        var (api, http) = Create(baseUrl, email);
+        http.On("PUT", path, """{"results":[{"id":"att9","title":"Diagram","version":{"number":4}}]}""");
+
+        var attachment = await api.PutAttachmentAsync("42", "Diagram", "application/vnd.jgraph.mxfile", new MemoryStream("<mxfile/>"u8.ToArray()), Ct);
+
+        Assert.Equal(new ConfluenceAttachment("att9", "Diagram", 4), attachment);
+        var request = Assert.Single(http.Requests);
+        Assert.Contains("<mxfile/>", request.Body);
+        Assert.Contains("name=\"minorEdit\"", request.Body);
+    }
 }
