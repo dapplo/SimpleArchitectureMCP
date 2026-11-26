@@ -29,6 +29,12 @@ public sealed class ConfluenceOptions
 
     public int TimeoutSeconds { get; set; } = 30;
 
+    /// <summary>
+    /// Diagram apps installed on this Confluence: <c>auto</c> (default, detected), <c>none</c>, or a list such as
+    /// <c>drawio, plantuml, mermaid</c>. Tools that need an app are hidden when it is missing.
+    /// </summary>
+    public string? DiagramApps { get; set; }
+
     public bool TryValidate(out string? reason)
     {
         if (string.IsNullOrWhiteSpace(BaseUrl) || string.IsNullOrWhiteSpace(ApiToken))

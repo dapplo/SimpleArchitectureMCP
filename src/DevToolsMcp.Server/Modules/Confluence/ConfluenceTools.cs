@@ -6,7 +6,7 @@ using ModelContextProtocol.Server;
 namespace DevToolsMcp.Server.Modules.Confluence;
 
 /// <summary>
-/// The six Confluence tools. Descriptions are intentionally terse: every word here is paid for in every prompt.
+/// The seven Confluence tools. Descriptions are intentionally terse: every word here is paid for in every prompt.
 /// </summary>
 [McpServerToolType]
 public sealed class ConfluenceTools(ConfluenceService confluence)
@@ -66,6 +66,16 @@ public sealed class ConfluenceTools(ConfluenceService confluence)
         CancellationToken cancellationToken = default) =>
         Run("confluence_append_to_page", () => confluence.AppendToPageAsync(page_id, markdown_snippet, version_message, cancellationToken));
 
+    [McpServerTool(Name = "confluence_add_drawio")]
+    [Description("Upload a .drawio file to a page and show it with the draw.io macro (draw.io app required). Re-running updates the diagram in place.")]
+    public Task<string> AddDrawio(
+        string page_id,
+        [Description("Local .drawio file")] string file,
+        [Description("Diagram name; default the file name")] string? name = null,
+        [Description("Optional PNG preview")] string? png = null,
+        CancellationToken cancellationToken = default) =>
+        Run("confluence_add_drawio", () => confluence.AddDrawioAsync(page_id, file, name, png, null, cancellationToken));
+
     /// <summary>Maps failures to concise MCP tool errors and records the output size.</summary>
     private static async Task<string> Run(string tool, Func<Task<string>> action)
     {
@@ -73,7 +83,7 @@ public sealed class ConfluenceTools(ConfluenceService confluence)
         {
             return DevToolsTelemetry.Output(tool, await action().ConfigureAwait(false));
         }
-        catch (Exception ex) when (ex is ConfluenceApiException or ConfluenceNotConfiguredException or ArgumentException or HttpRequestException or TimeoutException)
+        catch (Exception ex) when (ex is ConfluenceApiException or ConfluenceNotConfiguredException or ArgumentException or IOException or HttpRequestException or TimeoutException)
         {
             throw new McpException(ex.Message, ex);
         }

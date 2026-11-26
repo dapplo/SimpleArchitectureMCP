@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using DevToolsMcp.Server.Core.Security;
 
 namespace DevToolsMcp.Server.Modules.Jira;
 
@@ -367,47 +368,8 @@ public sealed partial class JiraService
         return result;
     }
 
-    /// <summary>
-    /// The server runs with the user's file permissions, so attachments are limited to ordinary files: nothing in a
-    /// hidden file or folder (~/.ssh, ~/.aws, ~/.config/devtools-mcp, .env, ...) or in Windows AppData, also after
-    /// following symbolic links. This keeps a prompt-injected issue from talking the model into uploading credentials.
-    /// </summary>
-    internal static FileInfo ValidateAttachmentPath(string? filePath)
-    {
-        if (string.IsNullOrWhiteSpace(filePath))
-        {
-            throw new ArgumentException("file_path is required.");
-        }
-
-        var path = filePath.Trim();
-        if (path.StartsWith('~'))
-        {
-            path = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + path[1..];
-        }
-
-        var file = new FileInfo(Path.GetFullPath(path));
-        if (!file.Exists)
-        {
-            throw new ArgumentException($"File not found: {file.FullName}");
-        }
-
-        var target = file.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? file.FullName;
-        foreach (var candidate in new[] { file.FullName, Path.GetFullPath(target) })
-        {
-            var segments = candidate.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Any(s => s.StartsWith('.') || s.Equals("AppData", StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new ArgumentException($"Refusing to attach {file.FullName}: files in hidden or application-data folders may hold credentials.");
-            }
-        }
-
-        if (file.Length > MaxAttachmentBytes)
-        {
-            throw new ArgumentException($"{file.Name} is {Size(file.Length)}; the limit is {Size(MaxAttachmentBytes)}.");
-        }
-
-        return file;
-    }
+    /// <summary>Ordinary local files only, up to 100 MB (see <see cref="LocalFiles.ValidateUpload"/>).</summary>
+    internal static FileInfo ValidateAttachmentPath(string? filePath) => LocalFiles.ValidateUpload(filePath, MaxAttachmentBytes, Size);
 
     [GeneratedRegex(@"^(?:[A-Za-z][A-Za-z0-9_]*-\d{1,10}|\d{1,18})$")]
     private static partial Regex IssueKey();

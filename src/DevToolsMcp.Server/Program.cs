@@ -3,6 +3,7 @@ using DevToolsMcp.Server.Core.Modules;
 using DevToolsMcp.Server.Core.Security;
 using DevToolsMcp.Server.Core.Settings;
 using DevToolsMcp.Server.Core.Telemetry;
+using DevToolsMcp.Server.Modules.Archi;
 using DevToolsMcp.Server.Modules.Confluence;
 using DevToolsMcp.Server.Modules.Jira;
 using DevToolsMcp.Server.Modules.GitHub;
@@ -35,7 +36,8 @@ builder.ConfigureLocalKestrel(ownsPort ? port : 0);
 builder.AddDevToolsTelemetry();                                  // OTLP traces/metrics/logs (Aspire dashboard)
 
 // 1) Compose the AOT-safe JSON contexts of all modules.
-var json = DevToolsJson.Compose(ConfluenceJsonContext.Default, JiraJsonContext.Default, GitHubJsonContext.Default);
+var json = DevToolsJson.Compose(ConfluenceJsonContext.Default, JiraJsonContext.Default, GitHubJsonContext.Default,
+    ArchiJsonContext.Default);
 builder.Services.ConfigureHttpJsonOptions(o => json.ApplyTo(o.SerializerOptions));
 
 // 2) MCP server over Streamable HTTP. Stateless: tools only, no server-initiated requests, nothing to clean up.
@@ -58,6 +60,7 @@ if (stdio)
 mcp.AddConfluenceModule(builder.Configuration, json.McpOptions);
 mcp.AddJiraModule(builder.Configuration, json.McpOptions);
 mcp.AddGitHubModule(builder.Configuration, json.McpOptions);
+mcp.AddArchiModule(builder.Configuration, json.McpOptions);
 
 var app = builder.Build();
 
