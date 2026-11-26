@@ -229,6 +229,7 @@ What is copied:
 * **Nobody gets pinged by accident.** A Jira mention becomes `@login` only for mapped users; others become inert `` `@name` `` text.
 * **Rate limits.** GitHub writes are spaced a second apart, as GitHub asks. Every module now waits for `Retry-After` / `X-RateLimit-Reset` (up to a minute) on HTTP 429 and GitHub's rate-limit 403s, also for POSTs. Longer waits stop the batch with a message; run the same call again later.
 * **Large projects.** Page through with `cursor`. Jira queries without `ORDER BY` are copied oldest first. GitHub search stops at 1,000 results, so slice larger repositories by date (`created:2024-01-01..2024-06-30`).
+* A GitHub target must be a repository you can push to. Anyone may open issues in a public repository, so this keeps a prompt-injected `target` from copying private Jira issues to someone else's repo.
 * Try `dry_run=true` first: it shows title, labels, assignee, state and counts without writing anything.
 
 | Key (env var) | Meaning |

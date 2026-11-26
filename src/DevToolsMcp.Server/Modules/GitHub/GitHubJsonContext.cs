@@ -72,6 +72,14 @@ public sealed class GhComment
 public sealed class GhRepo
 {
     public string? DefaultBranch { get; set; }
+
+    /// <summary>What the token's user may do in the repository (only present on authenticated requests).</summary>
+    public GhRepoPermissions? Permissions { get; set; }
+}
+
+public sealed class GhRepoPermissions
+{
+    public bool Push { get; set; }
 }
 
 public sealed class GhGitObject

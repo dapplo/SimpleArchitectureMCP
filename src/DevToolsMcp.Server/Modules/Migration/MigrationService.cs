@@ -111,6 +111,21 @@ public sealed partial class MigrationService
         public bool BranchReady { get; set; }
     }
 
+    /// <summary>
+    /// The copy runs on the server, so the client's approval prompt shows only the target. Anyone can open issues in a
+    /// public repository: a prompt-injected target such as <c>attacker/inbox</c> would receive private Jira issues.
+    /// Only repositories the user can push to (their own or their team's) are accepted.
+    /// </summary>
+    private static async Task EnsureCanPushAsync(GitHubApi github, string repo, CancellationToken ct)
+    {
+        var info = await github.GetRepoAsync(repo, ct).ConfigureAwait(false);
+        if (info.Permissions?.Push != true)
+        {
+            throw new ArgumentException($"Refusing to migrate into {repo}: your GitHub account has no write access there. "
+                                        + "Migrations only go to repositories you can push to.");
+        }
+    }
+
     // ---- Batch driver ------------------------------------------------------------------------------------------
 
     private static async Task<string> BatchAsync(IReadOnlyList<string> sources, string? next, Func<string, Task<string>> migrate, CancellationToken ct)
@@ -182,6 +197,12 @@ public sealed partial class MigrationService
         }
 
         var targetId = $"github:{github.WebHost}/{repo}";
+        // Before anything is written; a dry run and a rerun of finished issues write nothing, so they skip the check.
+        if (!run.DryRun && keys.Any(k => run.Map.Get(MigrationMap.Key($"jira:{jira.SiteBase.Host}/{k}", targetId)) is not { Done: true }))
+        {
+            await EnsureCanPushAsync(github, repo, ct).ConfigureAwait(false);
+        }
+
         return await BatchAsync(keys, next, key => JiraIssueToGitHubAsync(run, jira, github, repo, targetId, key, ct), ct).ConfigureAwait(false);
     }
 
