@@ -4,7 +4,7 @@ devtools-mcp is a small MCP server that runs on your own machine and connects an
 
 | | Without devtools-mcp | With devtools-mcp |
 | --- | --- | --- |
-| Tool definitions sent with every request | Every tool of every server you connect, used or not | Only tools of modules you configured: 6–7 per provider (Confluence ≈ 0.6 K tokens, Jira ≈ 0.8 K, GitHub ≈ 0.8 K) |
+| Tool definitions sent with every request | Every tool of every server you connect, used or not | Only tools of modules you configured: 6–7 per provider (Confluence ≈ 0.8 K tokens, Jira ≈ 0.7 K, GitHub ≈ 0.7 K) |
 | A typical answer (search, get) | Raw API JSON: URLs, ids, user objects, reactions | One line per hit, or Markdown with a short front matter |
 | Changing several things on an item | Several tool calls, each answered with a full object | One call, answered with one confirmation line |
 | Credentials | Often a hosted service or a token in a config file per client | Your own token, stored per user on your machine, used only from `localhost` |
@@ -23,6 +23,8 @@ Fewer tokens also mean faster answers, less pressure on the context window (so l
 These come from the core, so each new provider gets them for free:
 
 * **Unconfigured modules cost zero tokens.** Their tools are hidden from `tools/list` until the module has valid settings, and they appear the moment you save the settings page (no restart).
+* **Each client gets only the tools it needs.** `/mcp` serves every configured tool. `/mcp/jira,github` serves only those modules, `/mcp/confluence,-confluence_export_page` hides one tool, and `/mcp/readonly` (or `/mcp/jira+readonly`) only the tools that change nothing. Point each client at the endpoint it needs; all of them run in the same process on the same port. For stdio, pass `--tools jira,github`; `DevToolsMcp:Tools` sets the default for `/mcp`. With all five modules configured, `/mcp` is 13 KB (~3,250 tokens), `/mcp/jira,github` 5.5 KB (~1,380) and `/mcp/jira+readonly` 0.7 KB (~170).
+* **Compact schemas.** The SDK's `"type":["string","null"],"default":null` for every optional parameter becomes `"type":"string"` (it is optional by not being required), which takes about 10% off the tool list.
 * **Few, terse tools.** Each provider has six to eight tools with short descriptions and flat, primitive parameters. Related operations are merged where it makes sense, for example one `github_update_issue` for edit, close, labels and assignees.
 * **Lean results.** DTOs map only the fields that are printed, and everything else is dropped while deserializing. Lists come back as one `id | title | …` line per item, and documents as Markdown with a small front matter.
 * **Short errors.** Failures become one actionable sentence ("GitHub API 404: Not Found (missing, or the token has no access)"), not an HTML error page or stack trace.
@@ -36,7 +38,7 @@ Some benefits have nothing to do with tokens: it runs locally with your own perm
 
 | Setup | Tools | Size | ≈ Tokens |
 | --- | --- | --- | --- |
-| devtools-mcp Confluence module | 8 | 3.4 KB | ~840 |
+| devtools-mcp Confluence module | 8 | 3.2 KB | ~790 |
 
 Measured the same way as for GitHub (compact name, description and input schema). The eight tools are search, get, export (to a local file), children, create, update, append and add draw.io diagram (listed only when the draw.io app is installed). There are no space-admin, permission, attachment-admin or user tools to pay for.
 
@@ -68,7 +70,7 @@ Confluence's REST API is especially wasteful for a model, for two reasons:
 
 | Setup | Tools | Size | ≈ Tokens |
 | --- | --- | --- | --- |
-| devtools-mcp Jira module | 7 | 3.2 KB | ~800 |
+| devtools-mcp Jira module | 7 | 2.8 KB | ~700 |
 
 This is measured the same way as GitHub: compact name, description and input schema. The seven tools are search, get, create, update (which also covers assignee and labels), transition (including close), comment and attach. There are no project, workflow, scheme, permission or user-admin tools to pay for. We haven't compared against the schemas of other Jira MCP servers.
 
@@ -105,11 +107,11 @@ Measured as the compact JSON of each tool's name, description and input schema (
 
 | Setup | Tools | Size | ≈ Tokens |
 | --- | --- | --- | --- |
-| devtools-mcp GitHub module | 6 | 3.3 KB | ~810 |
+| devtools-mcp GitHub module | 6 | 2.7 KB | ~670 |
 | Official GitHub MCP server, `issues` toolset only | 10 | 14.1 KB | ~3,500 |
 | Official GitHub MCP server, default toolsets (context, repos, issues, pull requests, users) | 45 | 46.4 KB | ~11,600 |
 
-The official server's numbers come from its published tool snapshots (`github-mcp-server` v1.14.0). Its single `issue_write` schema (3.6 KB) is larger than all six devtools-mcp GitHub tools together. With the default setup, that adds roughly 11 K tokens to **every** request, even in conversations that never touch GitHub.
+The official server's numbers come from its published tool snapshots (`github-mcp-server` v1.14.0). Its single `issue_write` schema (3.6 KB) is larger than all six devtools-mcp GitHub tools together (2.7 KB). With the default setup, that adds roughly 11 K tokens to **every** request, even in conversations that never touch GitHub.
 
 ### Variable cost: what each call returns
 
@@ -125,7 +127,7 @@ Where the savings come from:
 
 * Search hits are one line each: `#n | state | title | labels | assignees | updated`. Inside one repository, refs are printed as `#n` instead of the full name.
 * An issue is a short front matter (state, author, labels, assignees, milestone, url) plus the Markdown body as written. GitHub's `*_url` templates, node ids, full user objects, reactions and author associations are never mapped.
-* Only the **latest N comments** (default 20) are included, each with the id you need to edit it.
+* Only the **latest N comments** (default 5, up to 100) are included, each with the id you need to edit it.
 * `github_update_issue` changes title, body, state, milestone, labels and assignees in **one call** and answers with a single line, for example `Updated o/r#5: closed (not_planned); +labels wontfix.`
 
 ### What it deliberately leaves out
@@ -134,7 +136,7 @@ Basic issue work only: search, read, create, edit, close/reopen, comment, labels
 
 ## Migration
 
-`migrate_issues` (about 1 KB, ~250 tokens of schema, listed only when Jira and GitHub are both configured) moves issues between the two without the text passing through the model. Doing the same with the per-item tools means reading each issue with all its comments and then writing every description and comment again as model output: roughly the issue's size in input tokens plus the same again in (slower, pricier) output tokens, plus one call per comment. For a typical 6 KB issue with comments that is ~3,000 tokens and several calls; with `migrate_issues` it is one ~25-token line in a batch of up to 25 issues per call. The model cannot reword the text along the way either.
+`migrate_issues` (about 0.8 KB, ~200 tokens of schema, listed only when Jira and GitHub are both configured) moves issues between the two without the text passing through the model. Doing the same with the per-item tools means reading each issue with all its comments and then writing every description and comment again as model output: roughly the issue's size in input tokens plus the same again in (slower, pricier) output tokens, plus one call per comment. For a typical 6 KB issue with comments that is ~3,000 tokens and several calls; with `migrate_issues` it is one ~25-token line in a batch of up to 25 issues per call. The model cannot reword the text along the way either.
 
 ## Compared with no tool at all
 

@@ -23,7 +23,7 @@ public sealed class ConfluenceTools(ConfluenceService confluence)
         ToolErrors.RunAsync("confluence_search", Service, () => confluence.SearchAsync(query, space_key, limit, cancellationToken), cancellationToken);
 
     [McpServerTool(Name = "confluence_get_page", ReadOnly = true, Idempotent = true)]
-    [Description("Get a page (id, title, version, body). Macros appear as **[Confluence Macro: name]**; to edit pages with complex macros, use format=storage here and in confluence_update_page.")]
+    [Description("Get a page (id, title, version, Markdown body). Macros show as **[Confluence Macro: name]**; for pages with complex macros use format=storage here and in confluence_update_page.")]
     public Task<string> GetPage(
         string page_id,
         [Description("markdown or storage")] string format = "markdown",

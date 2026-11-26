@@ -23,7 +23,8 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 | Technique | Effect |
 | --- | --- |
 | Tools of unconfigured modules are **hidden from `tools/list`** | Unused integrations add zero schema tokens |
-| Terse tool descriptions, primitive parameters | All 8 Confluence tool schemas total ≈ 3.4 KB (~840 tokens); the 7 Jira tools ≈ 3.2 KB (~800 tokens); the 6 GitHub tools ≈ 3.3 KB (~810 tokens); the 3 Archi tools ≈ 3.9 KB (~970 tokens); `migrate_issues` ≈ 1 KB (~250 tokens) |
+| Terse tool descriptions, primitive parameters | All 8 Confluence tool schemas total ≈ 3.2 KB (~790 tokens); the 7 Jira tools ≈ 2.8 KB (~700 tokens); the 6 GitHub tools ≈ 2.7 KB (~670 tokens); the 3 Archi tools ≈ 3.5 KB (~880 tokens); `migrate_issues` ≈ 0.8 KB (~200 tokens) |
+| Per-client tool scopes | `/mcp/jira,github`, `/mcp/readonly`, `--tools jira` (stdio): a client sees only the tools it needs |
 | Jira issues are returned as front matter + **Markdown**, with only the fields that matter | No custom fields, avatars, `self` links or changelog |
 | Pages are returned as **Markdown**, not storage XHTML | Usually several times smaller than the raw body |
 | Search/children return one `id \| title \| …` line per hit | No `_links`, `_expandable`, reactions, node ids or user objects |

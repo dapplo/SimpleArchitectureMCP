@@ -27,7 +27,7 @@ public sealed class JiraTools(JiraService jira)
     [Description("Get an issue: fields, Markdown description, latest comments.")]
     public Task<string> GetIssue(
         string issue_key,
-        [Description("Latest comments to include, 0-50")] int comments = 5,
+        [Description("Latest comments, 0-50")] int comments = 5,
         CancellationToken cancellationToken = default) =>
         ToolErrors.RunAsync("jira_get_issue", Service, () => jira.GetIssueAsync(issue_key, comments, cancellationToken), cancellationToken);
 
