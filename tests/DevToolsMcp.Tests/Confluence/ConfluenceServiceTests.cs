@@ -95,11 +95,11 @@ public class ConfluenceServiceTests
     private static string NewSaveDir() => Path.Combine(AppContext.BaseDirectory, "save-tests", Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public async Task Get_page_save_to_writes_markdown_and_returns_only_a_confirmation()
+    public async Task Export_page_writes_markdown_and_returns_only_a_confirmation()
     {
         var dir = NewSaveDir();
         var path = Path.Combine(dir, "sub", "page.md");
-        var result = await new ConfluenceService(new FakeAdapter()).GetPageAsync("7", null, path, Ct);
+        var result = await new ConfluenceService(new FakeAdapter()).ExportPageAsync("7", path, null, Ct);
 
         Assert.Equal($"Saved 7 'Existing title' v4 to {Path.GetFullPath(path)} (1 KB).", result);
         Assert.Equal("---\nid: 7\ntitle: Existing title\nversion: 4\n---\nkeep\n\n**[Confluence Macro: jira | key=X-1]**", await File.ReadAllTextAsync(path, Ct));
@@ -107,13 +107,13 @@ public class ConfluenceServiceTests
     }
 
     [Fact]
-    public async Task Get_page_save_to_folder_names_the_file_after_the_title()
+    public async Task Export_page_folder_names_the_file_after_the_title()
     {
         var dir = NewSaveDir();
         Directory.CreateDirectory(dir);
         var api = new FakeAdapter();
         api.Page = api.Page with { Title = "Plan: Q1/Q2?" };
-        await new ConfluenceService(api).GetPageAsync("7", "storage", dir, Ct);
+        await new ConfluenceService(api).ExportPageAsync("7", dir, "storage", Ct);
 
         var file = Assert.Single(Directory.GetFiles(dir));
         Assert.Equal("Plan_ Q1_Q2_.xhtml", Path.GetFileName(file));
@@ -127,11 +127,11 @@ public class ConfluenceServiceTests
     [InlineData("ok/.bashrc.md")]
     [InlineData("ok/run.sh")]
     [InlineData("ok/page.xhtml")] // markdown goes to .md, .markdown or .txt only
-    public async Task Get_page_save_to_refuses_hidden_folders_and_other_extensions(string relative)
+    public async Task Export_page_refuses_hidden_folders_and_other_extensions(string relative)
     {
         var dir = NewSaveDir();
         var path = Path.Combine(dir, relative);
-        await Assert.ThrowsAsync<ArgumentException>(() => new ConfluenceService(new FakeAdapter()).GetPageAsync("7", null, path, Ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => new ConfluenceService(new FakeAdapter()).ExportPageAsync("7", path, null, Ct));
         Assert.False(File.Exists(path));
     }
 

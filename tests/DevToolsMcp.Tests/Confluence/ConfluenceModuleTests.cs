@@ -19,11 +19,11 @@ public class ConfluenceModuleTests
     }
 
     [Fact]
-    public void Registers_six_prefixed_tools()
+    public void Registers_seven_prefixed_tools()
     {
         var (sp, _, _) = Build([]);
         var names = sp.GetServices<McpServerTool>().Select(t => t.ProtocolTool.Name).Order().ToArray();
-        Assert.Equal(["confluence_append_to_page", "confluence_create_page", "confluence_get_page", "confluence_get_page_children",
+        Assert.Equal(["confluence_append_to_page", "confluence_create_page", "confluence_export_page", "confluence_get_page", "confluence_get_page_children",
             "confluence_search", "confluence_update_page"], names);
     }
 

@@ -52,30 +52,30 @@ public sealed partial class ConfluenceService
         return sb.ToString().TrimEnd();
     }
 
-    public Task<string> GetPageAsync(string pageId, string? format, CancellationToken ct) => GetPageAsync(pageId, format, null, ct);
-
-    /// <summary>
-    /// Returns the page, or with <paramref name="saveTo"/> writes it to a local file and returns only a one-line
-    /// confirmation, so the body never enters the conversation.
-    /// </summary>
-    public async Task<string> GetPageAsync(string pageId, string? format, string? saveTo, CancellationToken ct)
+    public async Task<string> GetPageAsync(string pageId, string? format, CancellationToken ct)
     {
         var storage = IsStorage(format);
-        var save = string.IsNullOrWhiteSpace(saveTo) ? null : saveTo;
-        var id = ValidateId(pageId);
-        var page = await Api.GetPageAsync(id, includeBody: true, ct).ConfigureAwait(false);
-        var extensions = storage ? StorageExtensions : MarkdownExtensions;
-        // Validate after fetching: the default file name comes from the title.
-        var file = save is null ? null : LocalSavePath.Validate(save, LocalSavePath.FileName(page.Title, extensions[0]), extensions);
-        var body = page.StorageBody ?? string.Empty;
-        var header = $"---\nid: {page.Id}\ntitle: {page.Title}\nversion: {page.Version}\n---\n";
-        // The Markdown is appended to the header directly: large pages are not copied once more.
-        var content = storage ? new StringBuilder(header).Append(body) : ConfluenceMarkupConverter.ToMarkdown(body, new StringBuilder(header));
-        if (file is null)
+        var page = await Api.GetPageAsync(ValidateId(pageId), includeBody: true, ct).ConfigureAwait(false);
+        return RenderPage(page, storage).ToString();
+    }
+
+    /// <summary>
+    /// Writes the page (same content as <see cref="GetPageAsync"/>) to a local file and returns only a one-line
+    /// confirmation, so the body never enters the conversation.
+    /// </summary>
+    public async Task<string> ExportPageAsync(string pageId, string? saveTo, string? format, CancellationToken ct)
+    {
+        var storage = IsStorage(format);
+        if (string.IsNullOrWhiteSpace(saveTo))
         {
-            return content.ToString();
+            throw new ArgumentException("save_to is required.");
         }
 
+        var page = await Api.GetPageAsync(ValidateId(pageId), includeBody: true, ct).ConfigureAwait(false);
+        var extensions = storage ? StorageExtensions : MarkdownExtensions;
+        // Validated after fetching: the default file name comes from the title.
+        var file = LocalSavePath.Validate(saveTo, LocalSavePath.FileName(page.Title, extensions[0]), extensions);
+        var content = RenderPage(page, storage);
         try
         {
             file.Directory?.Create();
@@ -91,6 +91,13 @@ public sealed partial class ConfluenceService
 
         file.Refresh();
         return $"Saved {page.Id} '{page.Title}' v{page.Version} to {file.FullName} ({Math.Max(1, file.Length / 1024)} KB).";
+    }
+
+    private static StringBuilder RenderPage(ConfluencePage page, bool storage)
+    {
+        var header = new StringBuilder($"---\nid: {page.Id}\ntitle: {page.Title}\nversion: {page.Version}\n---\n");
+        // The Markdown is appended to the header directly: large pages are not copied once more.
+        return storage ? header.Append(page.StorageBody) : ConfluenceMarkupConverter.ToMarkdown(page.StorageBody ?? string.Empty, header);
     }
 
     private static readonly string[] MarkdownExtensions = [".md", ".markdown", ".txt"];
