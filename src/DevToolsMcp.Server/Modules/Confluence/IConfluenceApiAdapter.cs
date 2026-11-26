@@ -17,6 +17,9 @@ public interface IConfluenceApiAdapter
 
     Task UpdatePageAsync(string pageId, string title, string storageBody, int newVersion, string? versionMessage, CancellationToken ct);
 
+    /// <summary>Renders storage-format markup to view HTML (used to detect which macros/apps exist).</summary>
+    Task<string> RenderStorageAsync(string storage, CancellationToken ct);
+
     /// <summary>Creates the page attachment, or adds a new version when one with that file name exists.</summary>
     Task<ConfluenceAttachment> PutAttachmentAsync(string pageId, string fileName, string contentType, Stream content, CancellationToken ct);
 }

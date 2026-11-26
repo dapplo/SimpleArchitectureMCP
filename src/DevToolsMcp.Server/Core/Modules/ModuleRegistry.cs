@@ -23,6 +23,12 @@ public sealed class ModuleDescriptor
     /// <summary>Evaluated on every request; reflects settings saved at runtime.</summary>
     public required Func<IServiceProvider, ModuleStatus> Status { get; init; }
 
+    /// <summary>
+    /// Optional per-tool check for tools of an active module that depend on what the remote system offers (e.g. a
+    /// Confluence app). Returns why the tool is unavailable, or null when it can be used. Hidden tools cost no tokens.
+    /// </summary>
+    public Func<IServiceProvider, string, CancellationToken, ValueTask<string?>>? ToolUnavailable { get; init; }
+
     /// <summary>Optional connectivity check used by the settings page ("Test connection").</summary>
     public Func<IServiceProvider, CancellationToken, Task<string>>? Test { get; init; }
 }
@@ -53,6 +59,30 @@ public sealed class ModuleRegistry
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Null when the tool can be used; otherwise why not (its module is inactive, or the module's
+    /// <see cref="ModuleDescriptor.ToolUnavailable"/> check says so).
+    /// </summary>
+    public async ValueTask<string?> ToolUnavailableAsync(string toolName, IServiceProvider services, CancellationToken ct)
+    {
+        foreach (var m in _modules)
+        {
+            if (!toolName.StartsWith(m.ToolPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!m.Status(services).Active)
+            {
+                return $"'{toolName}' is not configured. Open the devtools-mcp settings page to set it up.";
+            }
+
+            return m.ToolUnavailable is null ? null : await m.ToolUnavailable(services, toolName, ct).ConfigureAwait(false);
+        }
+
+        return null;
     }
 
     /// <summary>Gets the registry singleton from the service collection, adding it on first use.</summary>

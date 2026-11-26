@@ -7,7 +7,7 @@ public class ConfluenceServiceTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private sealed class FakeAdapter : IConfluenceApiAdapter
+    internal sealed class FakeAdapter : IConfluenceApiAdapter
     {
         public ConfluencePage Page { get; set; } = new("7", "Existing title", 4,
             "<p>keep</p><ac:structured-macro ac:name=\"jira\"><ac:parameter ac:name=\"key\">X-1</ac:parameter></ac:structured-macro>");
@@ -34,6 +34,10 @@ public class ConfluenceServiceTests
             Task.FromResult(new ConfluencePageRef("9", title, "https://w/9"));
 
         public List<(string Name, string ContentType, int Length)> Attachments { get; } = [];
+
+        public Func<string, string> Render { get; set; } = storage => storage;
+
+        public Task<string> RenderStorageAsync(string storage, CancellationToken ct) => Task.FromResult(Render(storage));
 
         public Task<ConfluenceAttachment> PutAttachmentAsync(string pageId, string fileName, string contentType, Stream content, CancellationToken ct)
         {

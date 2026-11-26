@@ -22,7 +22,8 @@ public sealed class ConfluenceConnection : IDisposable
     }
 
     /// <param name="Adapter">null when Confluence is not (validly) configured.</param>
-    public sealed record State(IConfluenceApiAdapter? Adapter, string Message);
+    /// <param name="DiagramApps">null when Confluence is not configured.</param>
+    public sealed record State(IConfluenceApiAdapter? Adapter, string Message, ConfluenceDiagramApps? DiagramApps = null);
 
     public State Current => Volatile.Read(ref _state);
 
@@ -38,8 +39,9 @@ public sealed class ConfluenceConnection : IDisposable
         }
 
         var deployment = options.ResolveDeploymentType();
-        return new State(ConfluenceModule.CreateAdapter(deployment, _httpClientFactory, options),
-            $"{deployment} · {options.BaseUrl!.Trim().TrimEnd('/')}");
+        var adapter = ConfluenceModule.CreateAdapter(deployment, _httpClientFactory, options);
+        var diagrams = new ConfluenceDiagramApps(options.DiagramApps, () => adapter);
+        return new State(adapter, $"{deployment} · {options.BaseUrl!.Trim().TrimEnd('/')} · diagram apps: {diagrams.Describe()}", diagrams);
     }
 
     public void Dispose() => _subscription.Dispose();

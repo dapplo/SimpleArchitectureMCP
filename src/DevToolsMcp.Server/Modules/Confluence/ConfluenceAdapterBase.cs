@@ -65,6 +65,15 @@ public abstract partial class ConfluenceAdapterBase(IHttpClientFactory httpClien
 
     public abstract Task UpdatePageAsync(string pageId, string title, string storageBody, int newVersion, string? versionMessage, CancellationToken ct);
 
+    /// <summary>v1 <c>POST contentbody/convert/view</c>, available to every user on Cloud and Data Center.</summary>
+    public async Task<string> RenderStorageAsync(string storage, CancellationToken ct)
+    {
+        var view = await SendAsync(HttpMethod.Post, $"{RestApiPrefix}contentbody/convert/view",
+            new StorageValue { Value = storage, Representation = "storage" },
+            ConfluenceJsonContext.Default.StorageValue, ConfluenceJsonContext.Default.StorageValue, ct).ConfigureAwait(false);
+        return view.Value ?? string.Empty;
+    }
+
     /// <summary>
     /// v1 <c>PUT content/{id}/child/attachment</c> creates or updates by file name, on Cloud and Data Center alike
     /// (Cloud's v2 API has no upload).

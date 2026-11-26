@@ -57,6 +57,7 @@ public static class StdioToolListNotifier
         }
     }
 
+    // Active modules plus their status line, which also reflects settings that change the tool list (e.g. diagram apps).
     private static string Snapshot(ModuleRegistry registry, IServiceProvider services) =>
-        string.Join(",", registry.ActiveModules(services));
+        string.Join(",", registry.Modules.Select(m => (m, s: m.Status(services))).Where(x => x.s.Active).Select(x => $"{x.m.Name} ({x.s.Message})"));
 }
