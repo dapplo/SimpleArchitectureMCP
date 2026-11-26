@@ -51,6 +51,11 @@ public static class ConfluenceModule
                 var state = sp.GetRequiredService<ConfluenceConnection>().Current;
                 return new ModuleStatus(state.Adapter is not null, state.Message);
             },
+            Conversions =
+            [
+                new("page-md", "Page → Markdown (.md)", "text", "Page id or page URL", null,
+                    (sp, input, ct) => sp.GetRequiredService<ConfluenceService>().DownloadPageAsync(input.Text!, ct)),
+            ],
             ToolUnavailable = async (sp, tool, ct) =>
             {
                 if (tool != DrawioTool || sp.GetRequiredService<ConfluenceConnection>().Current.DiagramApps is not { } diagrams)

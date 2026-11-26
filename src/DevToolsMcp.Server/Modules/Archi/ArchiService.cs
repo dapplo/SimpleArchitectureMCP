@@ -12,7 +12,7 @@ namespace DevToolsMcp.Server.Modules.Archi;
 /// Renders the views of an Archi model (.archimate) or an Open Exchange Format file (.xml) to PNG, and writes
 /// exchange files from <see cref="ArchiModelSpec"/>. One Archi process runs at a time.
 /// </summary>
-public sealed class ArchiService : IDisposable
+public sealed partial class ArchiService : IDisposable
 {
     private readonly IConfiguration _configuration;
     private readonly ArchiRunner _runner;
@@ -64,11 +64,18 @@ public sealed class ArchiService : IDisposable
     }
 
     /// <summary>Renders the named views (all when empty) of a model file to PNG files in <paramref name="outDir"/>.</summary>
-    public async Task<IReadOnlyList<RenderedView>> RenderAsync(string model, string[]? views, string? outDir, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<RenderedView>> RenderAsync(string model, string[]? views, string? outDir, CancellationToken cancellationToken)
     {
-        var (options, executable) = Require();
+        var options = Require().Options;
         var input = ValidateModelPath(model);
         var target = string.IsNullOrWhiteSpace(outDir) ? options.OutputPath : ArchiPaths.ValidateOutput(outDir, options.OutputPath);
+        return RenderToAsync(input, views, target, cancellationToken);
+    }
+
+    /// <summary>Renders into <paramref name="target"/>, which the caller has validated (or owns, like a temp folder).</summary>
+    private async Task<IReadOnlyList<RenderedView>> RenderToAsync(string input, string[]? views, string target, CancellationToken cancellationToken)
+    {
+        var (options, executable) = Require();
         var wanted = (views ?? []).Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v.Trim()).ToArray();
 
         var work = Path.Combine(Path.GetTempPath(), "devtools-mcp", "archi-run-" + Guid.NewGuid().ToString("N")[..12]);
@@ -138,42 +145,50 @@ public sealed class ArchiService : IDisposable
     /// </summary>
     public async Task<(string Path, IReadOnlyList<string> Pages)> ToDrawioAsync(string model, string[]? views, string? path, CancellationToken cancellationToken)
     {
-        var (options, executable) = Require();
+        var options = Require().Options;
         var input = ValidateModelPath(model);
         var file = string.IsNullOrWhiteSpace(path)
             ? Path.Combine(options.OutputPath, Path.GetFileNameWithoutExtension(input) + ".drawio")
             : ArchiPaths.ValidateOutput(path, options.OutputPath, ".drawio");
 
-        string xml;
-        if (input.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-        {
-            xml = await File.ReadAllTextAsync(input, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            var work = Path.Combine(Path.GetTempPath(), "devtools-mcp", "archi-run-" + Guid.NewGuid().ToString("N")[..12]);
-            Directory.CreateDirectory(work);
-            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                var exported = Path.Combine(work, "model.xml");
-                var run = await _runner.RunAsync(executable, ["--loadModel", input, "--xmlexchange.export", exported], options.Timeout, cancellationToken)
-                    .ConfigureAwait(false);
-                xml = File.Exists(exported)
-                    ? await File.ReadAllTextAsync(exported, cancellationToken).ConfigureAwait(false)
-                    : throw new ArchiException($"Archi could not export {Path.GetFileName(input)} (exit {run.ExitCode}):\n{run.Tail()}");
-            }
-            finally
-            {
-                _gate.Release();
-                TryDelete(work);
-            }
-        }
-
-        var result = DrawioConverter.Convert(xml, views);
+        var result = DrawioConverter.Convert(await ReadExchangeXmlAsync(input, cancellationToken).ConfigureAwait(false), views);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         await File.WriteAllTextAsync(file, result.Xml, new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
         return (file, result.Pages);
+    }
+
+    /// <summary>The model in Open Exchange format: an exchange .xml is read as is, an .archimate model is exported by Archi.</summary>
+    private async Task<string> ReadExchangeXmlAsync(string input, CancellationToken cancellationToken)
+    {
+        if (input.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return await File.ReadAllTextAsync(input, cancellationToken).ConfigureAwait(false);
+        }
+
+        var bytes = await RunArchiForFileAsync(["--loadModel", input, "--xmlexchange.export"], "model.xml", input, cancellationToken).ConfigureAwait(false);
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    /// <summary>Runs Archi with <paramref name="args"/> followed by an output file in a temp folder, and returns that file.</summary>
+    private async Task<byte[]> RunArchiForFileAsync(string[] args, string outputName, string input, CancellationToken cancellationToken)
+    {
+        var (options, executable) = Require();
+        var work = Path.Combine(Path.GetTempPath(), "devtools-mcp", "archi-run-" + Guid.NewGuid().ToString("N")[..12]);
+        Directory.CreateDirectory(work);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var output = Path.Combine(work, outputName);
+            var run = await _runner.RunAsync(executable, [.. args, output], options.Timeout, cancellationToken).ConfigureAwait(false);
+            return File.Exists(output)
+                ? await File.ReadAllBytesAsync(output, cancellationToken).ConfigureAwait(false)
+                : throw new ArchiException($"Archi could not convert {Path.GetFileName(input)} (exit {run.ExitCode}):\n{run.Tail()}");
+        }
+        finally
+        {
+            _gate.Release();
+            TryDelete(work);
+        }
     }
 
     /// <summary>Checks that Archi's command line answers and reports whether the jArchi plugin is installed.</summary>

@@ -39,6 +39,15 @@ public static class ArchiModule
                 var state = sp.GetRequiredService<ArchiService>().Current;
                 return new ModuleStatus(state.Executable is not null, state.Message);
             },
+            Conversions =
+            [
+                new("png", "Model → PNG", "file", null, ".xml,.archimate",
+                    (sp, input, ct) => sp.GetRequiredService<ArchiService>().DownloadPngAsync(input.FilePath!, ct)),
+                new("drawio", "Model → draw.io (.drawio)", "file", null, ".xml,.archimate",
+                    (sp, input, ct) => sp.GetRequiredService<ArchiService>().DownloadDrawioAsync(input.FilePath!, ct)),
+                new("format", "Open Exchange .xml ⇄ .archimate", "file", null, ".xml,.archimate",
+                    (sp, input, ct) => sp.GetRequiredService<ArchiService>().DownloadOtherFormatAsync(input.FilePath!, ct)),
+            ],
             Test = (sp, ct) => sp.GetRequiredService<ArchiService>().TestAsync(ct),
         });
 

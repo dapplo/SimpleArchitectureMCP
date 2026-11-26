@@ -153,6 +153,41 @@ public sealed class ArchiServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Settings_page_conversions_return_downloads_and_write_nothing_to_the_output_folder()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        RequireDisplay();
+        var output = Path.Combine(_dir, "out");
+        var (sp, registry) = Build(new() { ["Archi:ExecutablePath"] = FakeArchi(), ["Archi:OutputDirectory"] = output });
+        Assert.Equal(["png", "drawio", "format"], registry.Find("archi")!.Conversions.Select(c => c.Key).ToArray());
+        var archi = sp.GetRequiredService<ArchiService>();
+        var xml = Path.Combine(_dir, "upload", "Shop.xml");
+        Directory.CreateDirectory(Path.GetDirectoryName(xml)!);
+        await File.WriteAllTextAsync(xml, ExchangeModelBuilder.Build(ExchangeModelBuilderTests.Sample()).Xml, TestContext.Current.CancellationToken);
+
+        var png = await archi.DownloadPngAsync(xml, TestContext.Current.CancellationToken);
+        Assert.Equal(("Shop.zip", "application/zip"), (png.FileName, png.ContentType));
+        using (var zip = new ZipArchive(new MemoryStream(png.Content)))
+        {
+            Assert.Equal(["Main _ overview.png", "Sketch.png"], zip.Entries.Select(e => e.FullName).Order().ToArray());
+        }
+
+        var drawio = await archi.DownloadDrawioAsync(xml, TestContext.Current.CancellationToken);
+        Assert.Equal("Shop.drawio", drawio.FileName);
+        Assert.StartsWith("<mxfile", System.Text.Encoding.UTF8.GetString(drawio.Content));
+
+        var model = await archi.DownloadOtherFormatAsync(xml, TestContext.Current.CancellationToken);
+        Assert.Equal("Shop.archimate", model.FileName);
+        Assert.Contains("archimate:model", System.Text.Encoding.UTF8.GetString(model.Content));
+
+        Assert.False(Directory.Exists(output));
+    }
+
+    [Fact]
     public async Task Test_fails_when_jArchi_renderer_lacks_the_plugin()
     {
         if (OperatingSystem.IsWindows())

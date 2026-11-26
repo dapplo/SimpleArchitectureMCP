@@ -47,6 +47,7 @@ public sealed record HealthResponse(string Status, IReadOnlyList<string> Modules
 [JsonSerializable(typeof(HealthResponse))]
 [JsonSerializable(typeof(Settings.ModulesView))]
 [JsonSerializable(typeof(Settings.ModuleView))]
+[JsonSerializable(typeof(Settings.ConversionView))]
 [JsonSerializable(typeof(Settings.ResultView))]
 [JsonSerializable(typeof(Dictionary<string, string?>))]
 internal sealed partial class CoreJsonContext : JsonSerializerContext;

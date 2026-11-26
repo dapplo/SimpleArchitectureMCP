@@ -26,6 +26,7 @@ input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-rad
 .help{color:var(--muted);font-size:12px;margin-top:3px}.row{display:flex;gap:8px;margin-top:16px;align-items:center;flex-wrap:wrap}
 button{padding:8px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:inherit;cursor:pointer}
 button.ghost{background:transparent;color:var(--accent)}.msg{font-size:13px}.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+.conv{border-top:1px solid var(--line);margin-top:16px;padding-top:4px}.conv .row{margin-top:4px;flex-wrap:nowrap}.conv select{flex:0 0 auto;width:auto;max-width:45%}.conv input{flex:1;min-width:0}
 code,pre{font:12.5px ui-monospace,Menlo,Consolas,monospace}pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;overflow:auto}
 </style>
 </head>
@@ -47,6 +48,29 @@ async function call(method,url,body){
   if(r.status===401){const k=prompt('API key (McpAuth:ApiKey)');if(k){sessionStorage.setItem('mcpKey',k);return call(method,url,body)}}
   const data=await r.json().catch(()=>({ok:false,message:'HTTP '+r.status}));return{ok:r.ok,data};
 }
+async function download(url,body){
+  const h={};const key=sessionStorage.getItem('mcpKey');if(key)h['X-API-Key']=key;
+  const r=await fetch(url,{method:'POST',headers:h,body});
+  if(r.status===401){const k=prompt('API key (McpAuth:ApiKey)');if(k){sessionStorage.setItem('mcpKey',k);return download(url,body)}}
+  if(!r.ok){const d=await r.json().catch(()=>({message:'HTTP '+r.status}));return{ok:false,message:d.message}}
+  const cd=r.headers.get('Content-Disposition')||'';const star=/filename\*=UTF-8''([^;]+)/i.exec(cd),plain=/filename="?([^";]+)"?/i.exec(cd);
+  const name=star?decodeURIComponent(star[1]):plain?plain[1]:'download';
+  const a=$('a',{href:URL.createObjectURL(await r.blob()),download:name});document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  return{ok:true,message:'Downloaded '+name};
+}
+function converter(m){
+  const msg=$('span',{className:'msg'}),pick=$('select',{'aria-label':'Conversion'}),go=$('button',{type:'submit'},'Download');
+  for(const c of m.conversions)pick.append($('option',{value:c.key},c.label));
+  let input;const swap=()=>{const c=m.conversions.find(x=>x.key===pick.value);
+    const next=c.input==='file'?$('input',{type:'file',name:'file',accept:c.accept||'','aria-label':c.label}):$('input',{type:'text',name:'text',placeholder:c.placeholder||'','aria-label':c.label,autocomplete:'off'});
+    input?input.replaceWith(next):0;input=next};
+  swap();pick.onchange=swap;
+  const form=$('form',{className:'conv'},$('label',{},'Convert & download'),$('div',{className:'row'},pick,input,go),msg);
+  form.onsubmit=async e=>{e.preventDefault();go.disabled=true;msg.className='msg';msg.textContent='Converting…';
+    try{const r=await download('/api/modules/'+m.name+'/convert/'+pick.value,new FormData(form));msg.className='msg '+(r.ok?'ok':'bad');msg.textContent=r.message}
+    finally{go.disabled=false}};
+  return form;
+}
 function render(m){
   const msg=$('span',{className:'msg'});const form=$('form');
   for(const s of m.settings){
@@ -60,6 +84,7 @@ function render(m){
   form.append($('div',{className:'row'},$('button',{type:'submit'},'Save'),test,msg));
   const sec=$('section',{id:'panel-'+m.name,role:'tabpanel','aria-labelledby':'tab-'+m.name},
     $('p',{className:'status'},(m.active?'Active · ':'Inactive · ')+m.status),form);
+  if(m.active&&m.conversions.length)sec.append(converter(m));
   sec.show=(ok,text)=>{msg.className='msg '+(ok?'ok':'bad');msg.textContent=text};
   const runTest=async(target,prefix)=>{target.show(true,prefix+'Testing…');const t=await call('POST','/api/modules/'+m.name+'/test');target.show(t.data.ok,prefix+t.data.message)};
   form.onsubmit=async e=>{e.preventDefault();
