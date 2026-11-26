@@ -8,7 +8,7 @@ using ModelContextProtocol.Server;
 namespace DevToolsMcp.Server.Modules.Archi;
 
 /// <summary>
-/// The two Archi tools. Images are written to files and only their paths are returned, unless <c>inline</c> asks for
+/// The three Archi tools. Images are written to files and only their paths are returned, unless <c>inline</c> asks for
 /// the picture itself: an image costs far more tokens than a path.
 /// </summary>
 [McpServerToolType]
@@ -49,6 +49,19 @@ public sealed class ArchiTools(ArchiService archi)
 
             var rendered = await archi.RenderAsync(file, null, null, cancellationToken).ConfigureAwait(false);
             return await Result(text, rendered, inline, cancellationToken).ConfigureAwait(false);
+        });
+
+    [McpServerTool(Name = "archi_to_drawio")]
+    [Description("Convert ArchiMate views to a draw.io file (one page per view, ArchiMate 3 shapes), e.g. for Confluence's draw.io app.")]
+    public Task<CallToolResult> ToDrawio(
+        [Description("Path to exchange .xml or .archimate")] string file,
+        [Description("View names or ids; default all")] string[]? views = null,
+        [Description(".drawio path; default the output folder")] string? path = null,
+        CancellationToken cancellationToken = default) =>
+        Run("archi_to_drawio", async () =>
+        {
+            var (drawio, pages) = await archi.ToDrawioAsync(file, views, path, cancellationToken).ConfigureAwait(false);
+            return new CallToolResult { Content = [new TextContentBlock { Text = $"{drawio} (pages: {string.Join(", ", pages)})" }] };
         });
 
     private static async Task<CallToolResult> Result(StringBuilder text, IReadOnlyList<ArchiService.RenderedView> rendered, bool inline,

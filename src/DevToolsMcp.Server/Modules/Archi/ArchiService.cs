@@ -132,6 +132,50 @@ public sealed class ArchiService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Writes a draw.io file with one page per selected view. Exchange .xml is converted directly; an .archimate
+    /// model is first exported to exchange format by Archi.
+    /// </summary>
+    public async Task<(string Path, IReadOnlyList<string> Pages)> ToDrawioAsync(string model, string[]? views, string? path, CancellationToken cancellationToken)
+    {
+        var (options, executable) = Require();
+        var input = ValidateModelPath(model);
+        var file = string.IsNullOrWhiteSpace(path)
+            ? Path.Combine(options.OutputPath, Path.GetFileNameWithoutExtension(input) + ".drawio")
+            : ArchiPaths.ValidateOutput(path, options.OutputPath, ".drawio");
+
+        string xml;
+        if (input.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            xml = await File.ReadAllTextAsync(input, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            var work = Path.Combine(Path.GetTempPath(), "devtools-mcp", "archi-run-" + Guid.NewGuid().ToString("N")[..12]);
+            Directory.CreateDirectory(work);
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var exported = Path.Combine(work, "model.xml");
+                var run = await _runner.RunAsync(executable, ["--loadModel", input, "--xmlexchange.export", exported], options.Timeout, cancellationToken)
+                    .ConfigureAwait(false);
+                xml = File.Exists(exported)
+                    ? await File.ReadAllTextAsync(exported, cancellationToken).ConfigureAwait(false)
+                    : throw new ArchiException($"Archi could not export {Path.GetFileName(input)} (exit {run.ExitCode}):\n{run.Tail()}");
+            }
+            finally
+            {
+                _gate.Release();
+                TryDelete(work);
+            }
+        }
+
+        var result = DrawioConverter.Convert(xml, views);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        await File.WriteAllTextAsync(file, result.Xml, new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
+        return (file, result.Pages);
+    }
+
     /// <summary>Checks that Archi's command line answers and reports whether the jArchi plugin is installed.</summary>
     public async Task<string> TestAsync(CancellationToken cancellationToken)
     {

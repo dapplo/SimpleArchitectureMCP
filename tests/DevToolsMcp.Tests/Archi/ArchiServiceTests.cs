@@ -80,9 +80,9 @@ public sealed class ArchiServiceTests : IDisposable
     {
         var (sp, _) = Build([]);
         var tools = sp.GetServices<McpServerTool>().Select(t => t.ProtocolTool).ToList();
-        Assert.Equal(["archi_create_model", "archi_render"], tools.Select(t => t.Name).Order().ToArray());
+        Assert.Equal(["archi_create_model", "archi_render", "archi_to_drawio"], tools.Select(t => t.Name).Order().ToArray());
         var total = tools.Sum(t => JsonSerializer.Serialize(t.InputSchema).Length + t.Name.Length + (t.Description?.Length ?? 0));
-        Assert.True(total < 4500, $"Archi tool schemas are {total} chars");
+        Assert.True(total < 5000, $"Archi tool schemas are {total} chars");
         var model = tools.Single(t => t.Name == "archi_create_model").InputSchema.GetProperty("properties").GetProperty("model");
         Assert.True(model.GetProperty("properties").TryGetProperty("elements", out _));
     }
@@ -133,6 +133,23 @@ public sealed class ArchiServiceTests : IDisposable
         var ex = await Assert.ThrowsAsync<ArgumentException>(() => archi.RenderAsync(xml, ["Other"], null, TestContext.Current.CancellationToken));
         Assert.Contains("Views: Main / overview, Sketch", ex.Message);
         Assert.Equal("Archi command line OK · jArchi plugin not installed · renderer HTML report.", await archi.TestAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Converts_exchange_file_to_drawio_without_running_Archi()
+    {
+        var output = Path.Combine(_dir, "out");
+        File.WriteAllText(Path.Combine(_dir, "Archi"), ""); // must exist to enable the module; not started for .xml input
+        var (sp, _) = Build(new() { ["Archi:ExecutablePath"] = Path.Combine(_dir, "Archi"), ["Archi:OutputDirectory"] = output });
+        var archi = sp.GetRequiredService<ArchiService>();
+
+        var (xml, _) = await archi.CreateModelAsync(ExchangeModelBuilderTests.Sample(), null, TestContext.Current.CancellationToken);
+        var (drawio, pages) = await archi.ToDrawioAsync(xml, null, null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(Path.Combine(output, "Shop.drawio"), drawio);
+        Assert.Equal(["Shop"], pages);
+        Assert.StartsWith("<mxfile", File.ReadAllText(drawio));
+        await Assert.ThrowsAsync<ArgumentException>(() => archi.ToDrawioAsync(xml, null, Path.Combine(_dir, "x.png"), TestContext.Current.CancellationToken));
     }
 
     [Fact]

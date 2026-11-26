@@ -277,21 +277,23 @@ public static class ExchangeModelBuilder
             Size(n);
         }
 
+        // Rows are centred on the widest one, so lines between layers run mostly vertically instead of
+        // cutting diagonally through the left-aligned column.
+        var rows = nodes.Where(n => n.Spec.X is null || n.Spec.Y is null).GroupBy(n => layers[n.Spec.Ref]).OrderBy(g => g.Key)
+            .SelectMany(band => band.Chunk(PerRow)).ToList();
+        var widest = rows.Count == 0 ? 0 : rows.Max(RowWidth);
         var y = Margin;
-        foreach (var band in nodes.Where(n => n.Spec.X is null || n.Spec.Y is null).GroupBy(n => layers[n.Spec.Ref]).OrderBy(g => g.Key))
+        foreach (var row in rows)
         {
-            foreach (var row in band.Chunk(PerRow))
+            var x = Margin + (widest - RowWidth(row)) / 2;
+            foreach (var n in row)
             {
-                var x = Margin;
-                foreach (var n in row)
-                {
-                    n.X = x;
-                    n.Y = y;
-                    x += n.W + Gap;
-                }
-
-                y += row.Max(n => n.H) + Gap;
+                n.X = x;
+                n.Y = y;
+                x += n.W + Gap;
             }
+
+            y += row.Max(n => n.H) + Gap;
         }
 
         foreach (var n in nodes.Where(n => n.Spec.X is not null && n.Spec.Y is not null))
@@ -300,6 +302,8 @@ public static class ExchangeModelBuilder
             n.Y = n.Spec.Y!.Value;
         }
     }
+
+    private static int RowWidth(LayoutNode[] row) => row.Sum(n => n.W) + Gap * (row.Length - 1);
 
     private static void Size(LayoutNode n)
     {

@@ -33,6 +33,16 @@ public class ConfluenceServiceTests
         public Task<ConfluencePageRef> CreatePageAsync(string spaceKey, string? parentId, string title, string storageBody, CancellationToken ct) =>
             Task.FromResult(new ConfluencePageRef("9", title, "https://w/9"));
 
+        public List<(string Name, string ContentType, int Length)> Attachments { get; } = [];
+
+        public Task<ConfluenceAttachment> PutAttachmentAsync(string pageId, string fileName, string contentType, Stream content, CancellationToken ct)
+        {
+            using var copy = new MemoryStream();
+            content.CopyTo(copy);
+            Attachments.Add((fileName, contentType, (int)copy.Length));
+            return Task.FromResult(new ConfluenceAttachment("att" + Attachments.Count, fileName, Attachments.Count(a => a.Name == fileName) + 2));
+        }
+
         public Task UpdatePageAsync(string pageId, string title, string storageBody, int newVersion, string? versionMessage, CancellationToken ct)
         {
             if (ConflictsToThrow-- > 0)
@@ -109,4 +119,76 @@ public class ConfluenceServiceTests
     [Fact]
     public async Task Rejects_unknown_format() =>
         await Assert.ThrowsAsync<ArgumentException>(() => new ConfluenceService(new FakeAdapter()).GetPageAsync("7", "html", Ct));
+    [Fact]
+    public async Task Add_drawio_uploads_attachments_and_appends_the_macro()
+    {
+        var dir = Directory.CreateTempSubdirectory("drawio-").FullName;
+        try
+        {
+            var file = Path.Combine(dir, "Web shop.drawio");
+            File.WriteAllText(file, "<mxfile/>");
+            File.WriteAllBytes(Path.Combine(dir, "p.png"), [1, 2, 3]);
+            var fake = new FakeAdapter();
+            var service = new ConfluenceService(() => fake);
+
+            var result = await service.AddDrawioAsync("7", file, null, Path.Combine(dir, "p.png"), null, Ct);
+
+            Assert.Equal("Added draw.io diagram 'Web shop' (attachment v3 + PNG preview) on 7; page version 5.", result);
+            Assert.Equal([("Web shop", "application/vnd.jgraph.mxfile", 9), ("Web shop.png", "image/png", 3)], fake.Attachments);
+            var body = Assert.Single(fake.Updates).Body;
+            Assert.StartsWith(fake.Page.StorageBody!, body); // existing content and macros stay
+            Assert.Contains("""<ac:structured-macro ac:name="drawio" ac:schema-version="1" ac:macro-id=""", body);
+            Assert.Contains("""<ac:parameter ac:name="diagramName">Web shop</ac:parameter>""", body);
+            Assert.Contains("""<ac:parameter ac:name="revision">3</ac:parameter>""", body);
+            Assert.Contains("""<ac:parameter ac:name="pageId">7</ac:parameter>""", body);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Add_drawio_again_only_bumps_the_revision()
+    {
+        var dir = Directory.CreateTempSubdirectory("drawio-").FullName;
+        try
+        {
+            var file = Path.Combine(dir, "a.drawio");
+            File.WriteAllText(file, "<mxfile/>");
+            var fake = new FakeAdapter();
+            fake.Page = fake.Page with { StorageBody = "<p>x</p>" + DrawioMacro.Create("Arch & co", "7", 1) };
+            var service = new ConfluenceService(() => fake);
+
+            var result = await service.AddDrawioAsync("7", file, "Arch & co", null, null, Ct);
+
+            Assert.StartsWith("Updated draw.io diagram 'Arch & co' (attachment v3)", result);
+            var body = Assert.Single(fake.Updates).Body;
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(body, "ac:name=\"drawio\""));
+            Assert.Contains("""<ac:parameter ac:name="diagramName">Arch &amp; co</ac:parameter>""", body);
+            Assert.Contains("""<ac:parameter ac:name="revision">3</ac:parameter>""", body);
+            Assert.DoesNotContain("""<ac:parameter ac:name="revision">1</ac:parameter>""", body);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Add_drawio_validates_inputs()
+    {
+        var service = new ConfluenceService(() => new FakeAdapter());
+        var file = Path.GetTempFileName();
+        try
+        {
+            Assert.Contains("expected a .drawio", (await Assert.ThrowsAsync<ArgumentException>(() => service.AddDrawioAsync("7", file, null, null, null, Ct))).Message);
+            Assert.Contains("not found", (await Assert.ThrowsAsync<ArgumentException>(() => service.AddDrawioAsync("7", file + ".drawio", null, null, null, Ct))).Message);
+            await Assert.ThrowsAsync<ArgumentException>(() => service.AddDrawioAsync("x", file, null, null, null, Ct));
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
 }

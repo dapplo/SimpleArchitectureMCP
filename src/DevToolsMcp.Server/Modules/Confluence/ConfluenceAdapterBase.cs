@@ -65,6 +65,34 @@ public abstract partial class ConfluenceAdapterBase(IHttpClientFactory httpClien
 
     public abstract Task UpdatePageAsync(string pageId, string title, string storageBody, int newVersion, string? versionMessage, CancellationToken ct);
 
+    /// <summary>
+    /// v1 <c>PUT content/{id}/child/attachment</c> creates or updates by file name, on Cloud and Data Center alike
+    /// (Cloud's v2 API has no upload).
+    /// </summary>
+    public async Task<ConfluenceAttachment> PutAttachmentAsync(string pageId, string fileName, string contentType, Stream content, CancellationToken ct)
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new StreamContent(content);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        // Quoted name/filename: some reverse proxies reject unquoted multipart parameters.
+        file.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
+        {
+            Name = "\"file\"",
+            FileName = "\"" + fileName.Replace("\"", "'", StringComparison.Ordinal) + "\"",
+            FileNameStar = fileName,
+        };
+        form.Add(file);
+        form.Add(new StringContent("true"), "\"minorEdit\"");
+
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"{RestApiPrefix}content/{Uri.EscapeDataString(pageId)}/child/attachment") { Content = form };
+        request.Headers.Authorization = authorization;
+        request.Headers.Add("X-Atlassian-Token", "no-check"); // XSRF protection for multipart uploads
+        using var response = await CreateClient().SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        var list = await ReadAsync(response, ConfluenceJsonContext.Default.V1ContentList, ct).ConfigureAwait(false);
+        var a = list.Results.FirstOrDefault() ?? throw new ConfluenceApiException(response.StatusCode, "Confluence returned no attachment.");
+        return new ConfluenceAttachment(a.Id ?? string.Empty, a.Title ?? fileName, a.Version?.Number ?? 1);
+    }
+
     protected async Task<T> GetAsync<T>(string path, JsonTypeInfo<T> typeInfo, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path);

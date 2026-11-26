@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using DevToolsMcp.Server.Core.Security;
 
 namespace DevToolsMcp.Server.Modules.Confluence;
 
@@ -105,6 +106,56 @@ public sealed partial class ConfluenceService
         return $"Appended to {id}; now version {version}.";
     }
 
+    /// <summary>
+    /// Puts a draw.io diagram on a page the way the draw.io app for Confluence stores it: the .drawio XML as an
+    /// attachment named after the diagram (no extension), an optional PNG preview as &lt;name&gt;.png, and a
+    /// <c>drawio</c> macro pointing at it. A page that already shows the diagram only gets its macro revision bumped.
+    /// </summary>
+    public async Task<string> AddDrawioAsync(string pageId, string filePath, string? name, string? pngPath, string? versionMessage, CancellationToken ct)
+    {
+        var id = ValidateId(pageId);
+        var file = LocalFiles.ValidateUpload(filePath, MaxDiagramBytes, Size, "file");
+        if (!file.Extension.Equals(".drawio", StringComparison.OrdinalIgnoreCase) && !file.Extension.Equals(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"{file.Name}: expected a .drawio file.");
+        }
+
+        var png = string.IsNullOrWhiteSpace(pngPath) ? null : LocalFiles.ValidateUpload(pngPath, MaxDiagramBytes, Size, "png");
+        if (png is not null && !png.Extension.Equals(".png", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"{png.Name}: expected a .png file.");
+        }
+
+        var diagram = DiagramName().Replace(string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(file.Name) : name.Trim(), "_");
+        if (diagram.Length == 0 || diagram.Length > 200)
+        {
+            throw new ArgumentException("name must be 1-200 characters.");
+        }
+
+        ConfluenceAttachment attachment;
+        await using (var stream = file.OpenRead())
+        {
+            attachment = await Api.PutAttachmentAsync(id, diagram, "application/vnd.jgraph.mxfile", stream, ct).ConfigureAwait(false);
+        }
+
+        if (png is not null)
+        {
+            await using var stream = png.OpenRead();
+            await Api.PutAttachmentAsync(id, diagram + ".png", "image/png", stream, ct).ConfigureAwait(false);
+        }
+
+        var added = false;
+        var version = await WriteWithNextVersionAsync(id, null, current =>
+        {
+            var body = current.StorageBody ?? string.Empty;
+            var updated = DrawioMacro.SetRevision(body, diagram, attachment.Version);
+            added = updated is null;
+            return updated ?? body + DrawioMacro.Create(diagram, id, attachment.Version);
+        }, includeBody: true, versionMessage ?? $"draw.io diagram {diagram}", ct).ConfigureAwait(false);
+
+        return $"{(added ? "Added" : "Updated")} draw.io diagram '{diagram}' (attachment v{attachment.Version}{(png is null ? "" : " + PNG preview")}) on {id}; page version {version}.";
+    }
+
     private async Task<int> WriteWithNextVersionAsync(string id, string? title, Func<ConfluencePage, string> body,
         bool includeBody, string? versionMessage, CancellationToken ct)
     {
@@ -140,4 +191,12 @@ public sealed partial class ConfluenceService
 
     [GeneratedRegex(@"^\d{1,20}$")]
     private static partial Regex PageId();
+
+    // Characters Confluence attachment names and the draw.io macro parameter can't carry.
+    [GeneratedRegex(@"[\\/:*?""<>|\x00-\x1f]")]
+    private static partial Regex DiagramName();
+
+    private const long MaxDiagramBytes = 50L * 1024 * 1024;
+
+    private static string Size(long bytes) => bytes < 1024 * 1024 ? $"{bytes / 1024} KB" : $"{bytes / (1024 * 1024)} MB";
 }

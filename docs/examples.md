@@ -54,6 +54,7 @@ Set `GitHub:DefaultRepo` (or the *Default repository* field on the settings page
 * "Render the 'Application landscape' view of `~/models/enterprise.archimate`." (`archi_render` with `views`)
 * "Show me the diagram." (`archi_render` or `archi_create_model` with `inline=true`, the only time the image itself enters the conversation)
 * "Turn the components listed on Confluence page 'Platform overview' into an ArchiMate model and attach the PNG to PROJ-12." (`confluence_get_page`, `archi_create_model`, `jira_attach_file`)
+* "Put the 'Deployment' view of `~/models/enterprise.archimate` on Confluence page 12345 as an editable draw.io diagram." (`archi_to_drawio`, then `confluence_add_drawio`; run it again after the model changes and the same diagram updates)
 
 ## Workflows across tools
 

@@ -6,7 +6,7 @@ A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io
 * Published as a **single-file, self-contained Native AOT** executable (~24 MB, about 60–80 ms from launch to healthy)
 * **Double-click to run**: a built-in settings page (`http://localhost:5180/`) opens on first start; paste your URL and token and the tools switch on without a restart
 * Optional **Aspire 17** AppHost for development, with OpenTelemetry traces, metrics and logs in the Aspire dashboard
-* Integrations: **Atlassian Confluence** and **Jira** (Cloud and Data Center / Server), **GitHub issues** (github.com and GitHub Enterprise) and **ArchiMate diagrams** (PNG export with a local [Archi](https://www.archimatetool.com) install, Open Exchange Format from compact JSON)
+* Integrations: **Atlassian Confluence** and **Jira** (Cloud and Data Center / Server), **GitHub issues** (github.com and GitHub Enterprise) and **ArchiMate diagrams** (PNG export with a local [Archi](https://www.archimatetool.com) install, Open Exchange Format from compact JSON, draw.io diagrams on Confluence pages)
 * Vertical feature slices, so further providers plug in without touching the core
 
 ## Documentation
@@ -23,7 +23,7 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 | Technique | Effect |
 | --- | --- |
 | Tools of unconfigured modules are **hidden from `tools/list`** | Unused integrations add zero schema tokens |
-| Terse tool descriptions, primitive parameters | All 6 Confluence tool schemas total ≈ 2.3 KB (~575 tokens); the 7 Jira tools ≈ 3.1 KB (~780 tokens); the 6 GitHub tools ≈ 3.2 KB (~800 tokens); the 2 Archi tools ≈ 3.4 KB (~850 tokens) |
+| Terse tool descriptions, primitive parameters | All 7 Confluence tool schemas total ≈ 3.2 KB (~800 tokens); the 7 Jira tools ≈ 3.1 KB (~780 tokens); the 6 GitHub tools ≈ 3.2 KB (~800 tokens); the 3 Archi tools ≈ 4 KB (~1000 tokens) |
 | Jira issues are returned as front matter + **Markdown**, with only the fields that matter | No custom fields, avatars, `self` links or changelog |
 | Pages are returned as **Markdown**, not storage XHTML | Usually several times smaller than the raw body |
 | Search/children return one `id \| title \| …` line per hit | No `_links`, `_expandable`, reactions, node ids or user objects |
@@ -67,7 +67,8 @@ src/
       ConfluenceJsonContext.cs   Source-generated DTOs
       ConfluenceMarkupConverter*.cs   Storage XHTML <-> Markdown
       ConfluenceService.cs       Versioning, validation, compact output
-      ConfluenceTools.cs         The 6 MCP tools
+      ConfluenceTools.cs         The 7 MCP tools
+      DrawioMacro.cs             The draw.io app's macro in storage format
     Modules/Jira/                The Jira vertical slice (same shape: options, connection, adapters, service, tools)
       JiraAdapterBase.cs         REST API v2 on Cloud and Data Center
       CloudJiraAdapter.cs        /search/jql, users by accountId
@@ -89,7 +90,8 @@ src/
       ExchangeModelBuilder.cs    JSON -> Open Exchange Format XML with automatic layout
       ArchiRunner.cs             Runs Archi's command line (xvfb-run on headless Linux)
       ArchiService.cs            Render via HTML report or jArchi script, collect PNGs
-      ArchiTools.cs              The 2 MCP tools
+      DrawioConverter.cs         Exchange XML -> draw.io file (ArchiMate 3 shapes)
+      ArchiTools.cs              The 3 MCP tools
   DevToolsMcp.AppHost/           Aspire 17 AppHost
 tests/DevToolsMcp.Tests/         xUnit v3 tests, grouped by slice
 .vscode/mcp.json                 VS Code / GitHub Copilot client config
@@ -105,8 +107,11 @@ tests/DevToolsMcp.Tests/         xUnit v3 tests, grouped by slice
 | `confluence_create_page` | `space_key`, `title`, `markdown_body`, `parent_id?` | `Created <id> \| <title> \| <url>` |
 | `confluence_update_page` | `page_id`, `markdown_body`, `title?`, `format`, `version_message?` | `Updated <id> to version <n>.` |
 | `confluence_append_to_page` | `page_id`, `markdown_snippet`, `version_message?` | `Appended to <id>; now version <n>.` |
+| `confluence_add_drawio` | `page_id`, `file` (`.drawio`), `name?` (default the file name), `png?` (preview) | `Added\|Updated draw.io diagram '<name>' (attachment v<n>) on <id>; page version <n>.` |
 
 Plain-text queries become `type = page AND text ~ "..."`; queries that already contain CQL operators pass through unchanged. `space_key` is validated and AND-ed in front, and any `ORDER BY` stays at the end.
+
+`confluence_add_drawio` stores the diagram the way the draw.io app for Confluence does: the `.drawio` XML as a page attachment named after the diagram (no extension), the optional PNG as `<name>.png`, and a `drawio` macro (`diagramName`, `revision` = attachment version) appended to the page. Running it again with the same name uploads a new attachment version and only bumps the existing macro's revision, so the diagram updates in place. The draw.io app must be installed; the upload uses the v1 `content/{id}/child/attachment` endpoint on both Cloud and Data Center. The file must be an ordinary local file (same hidden-folder guard as Jira attachments).
 
 Updates read the current version first and write `version + 1`. If someone else saves in between (HTTP 409), the server re-reads the version and retries once. Appends work on the raw storage body, so existing macros are never converted or lost.
 
@@ -189,6 +194,7 @@ Renders ArchiMate views to PNG with your local [Archi](https://www.archimatetool
 | --- | --- | --- |
 | `archi_render` | `file` (`.archimate` or exchange `.xml`), `views?` (names or ids, default all), `out_dir?`, `inline` (false) | `view \| png path \| WxH` per view, plus the images when `inline` |
 | `archi_create_model` | `model` (JSON below), `path?` (`.xml`), `render` (true), `inline` (false) | `<xml path> (n elements, n relationships, views: …)` then the `archi_render` lines |
+| `archi_to_drawio` | `file` (exchange `.xml` or `.archimate`), `views?`, `path?` (`.drawio`) | `<drawio path> (pages: …)` |
 
 ```json
 {
@@ -218,6 +224,8 @@ Renders ArchiMate views to PNG with your local [Archi](https://www.archimatetool
 * Every relationship whose ends are both on a view is drawn (`"connections": false` turns that off), except structural ones between a parent and its nested child, which the nesting already shows.
 * Errors are collected into one message (unknown types, duplicate ids, dangling references), so a model can fix them in one go. The output validates against the Open Group `archimate3_Diagram.xsd`.
 * PNGs are named after their views and overwrite older ones. Tools only write `.png`/`.xml` files and refuse hidden or `AppData` folders (except the configured output folder).
+
+**draw.io.** `archi_to_drawio` writes one draw.io page per view with draw.io's ArchiMate 3 shapes, Archi's default layer colours, the same positions, nesting and bendpoints, and the ArchiMate line and arrow styles (access read/write direction, directed association, …). Exchange `.xml` is converted without starting Archi; an `.archimate` model is first exported by Archi (`--xmlexchange.export`). Together with `confluence_add_drawio` this puts an editable diagram on a Confluence page in two calls: `archi_create_model` (or an existing model) → `archi_to_drawio` → `confluence_add_drawio`.
 
 **Renderer.** `HtmlReport` (default) works with plain Archi: it imports the model, creates Archi's HTML report in a temporary folder and takes the view PNGs from it (100% scale). `jArchi` runs a generated script with the [jArchi scripting plugin](https://www.archimatetool.com/plugins/) instead: it renders only the requested views, faster, and honours `Archi:Scale` and `Archi:Margin`. **Test connection** on the settings page tells you whether jArchi is installed.
 
