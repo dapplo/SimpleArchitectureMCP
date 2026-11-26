@@ -72,7 +72,7 @@ public static class LocalHosting
             return app;
         }
 
-        var expected = Encoding.UTF8.GetBytes(key);
+        var expected = KeyHash(key);
         return app.Use(async (ctx, next) =>
         {
             var path = ctx.Request.Path;
@@ -87,6 +87,12 @@ public static class LocalHosting
         });
     }
 
+    /// <summary>
+    /// Keys are compared as SHA-256 hashes: <see cref="CryptographicOperations.FixedTimeEquals"/> returns early on a
+    /// length mismatch, so comparing the raw bytes would reveal the key's length.
+    /// </summary>
+    internal static byte[] KeyHash(string key) => SHA256.HashData(Encoding.UTF8.GetBytes(key));
+
     internal static bool IsAuthorized(HttpRequest request, byte[] expected)
     {
         string? presented = request.Headers["X-API-Key"];
@@ -100,6 +106,51 @@ public static class LocalHosting
         }
 
         return !string.IsNullOrEmpty(presented)
-            && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(presented), expected);
+            && CryptographicOperations.FixedTimeEquals(KeyHash(presented), expected);
     }
+
+    /// <summary>
+    /// Rejects MCP requests a web page could make: with DNS rebinding a site's own host name points at 127.0.0.1, so its
+    /// script reaches <c>/mcp</c> "same-origin" and could call every tool with the user's tokens. The MCP spec asks
+    /// servers to validate <c>Origin</c> for exactly this. Unless <c>DevToolsMcp:AllowRemote</c> is set, the Host must
+    /// be a loopback name; an Origin, when sent (browsers do, MCP clients usually don't), must be a loopback page such
+    /// as the MCP Inspector, or the server itself.
+    /// </summary>
+    public static IApplicationBuilder UseMcpOriginGuard(this WebApplication app)
+    {
+        var allowRemote = AllowRemote(app.Configuration);
+        return app.Use(async (ctx, next) =>
+        {
+            if (ctx.Request.Path.StartsWithSegments("/mcp") && !IsTrustedMcpRequest(ctx.Request, allowRemote))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await ctx.Response.WriteAsync("Forbidden: requests from web pages (Origin/Host not local) are not accepted.").ConfigureAwait(false);
+                return;
+            }
+
+            await next(ctx).ConfigureAwait(false);
+        });
+    }
+
+    internal static bool IsTrustedMcpRequest(HttpRequest request, bool allowRemote)
+    {
+        if (!allowRemote && !IsLoopbackHost(request.Host.Host))
+        {
+            return false;
+        }
+
+        string? origin = request.Headers.Origin;
+        if (string.IsNullOrEmpty(origin))
+        {
+            return true;
+        }
+
+        return Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
+            && (IsLoopbackHost(uri.Host) || string.Equals(origin, $"{request.Scheme}://{request.Host}", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary><c>localhost</c> or a loopback IP literal (<c>127.x.x.x</c>, <c>[::1]</c>); never a DNS name that merely resolves there.</summary>
+    public static bool IsLoopbackHost(string host) =>
+        host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        || (IPAddress.TryParse(host.Trim('[', ']'), out var ip) && IPAddress.IsLoopback(ip));
 }

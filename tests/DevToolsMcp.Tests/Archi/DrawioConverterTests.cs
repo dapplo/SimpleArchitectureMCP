@@ -73,4 +73,17 @@ public class DrawioConverterTests
         Assert.Contains("Views: One, Two", ex.Message);
         Assert.Throws<ArgumentException>(() => DrawioConverter.Convert("<model/>"));
     }
+
+    [Fact]
+    public void Refuses_models_with_a_DTD()
+    {
+        // Billion laughs: each entity expands the previous one ten times.
+        const string bomb = """
+            <?xml version="1.0"?>
+            <!DOCTYPE model [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;"><!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">]>
+            <model xmlns="http://www.opengroup.org/xsd/archimate/3.0/"><name>&c;</name></model>
+            """;
+        var ex = Assert.Throws<ArgumentException>(() => DrawioConverter.Convert(bomb));
+        Assert.Contains("DTD", ex.Message);
+    }
 }

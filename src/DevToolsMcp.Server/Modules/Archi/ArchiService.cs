@@ -306,8 +306,15 @@ public sealed partial class ArchiService : IDisposable
     }
 
     /// <summary>jArchi writes images/&lt;id&gt;.png; Archi's HTML report has report/images/&lt;id&gt;.png.</summary>
-    private static string? FindImage(string work, string id)
+    internal static string? FindImage(string work, string id)
     {
+        // The id comes from the model file. "/home/me/photo" or "../../x" would make Path.Combine leave the work
+        // folder and copy (and return to the model) any PNG on disk; Archi's own ids are plain names.
+        if (id.Length == 0 || id != Path.GetFileName(id) || id is "." or ".." || id.IndexOfAny(['*', '?', '/', '\\']) >= 0)
+        {
+            return null;
+        }
+
         string[] direct = [Path.Combine(work, "images", id + ".png"), Path.Combine(work, "report", "images", id + ".png")];
         return direct.FirstOrDefault(File.Exists)
             ?? Directory.EnumerateFiles(work, id + ".png", SearchOption.AllDirectories).FirstOrDefault();
@@ -324,6 +331,7 @@ public sealed partial class ArchiService : IDisposable
         return $$"""
             var cfg = {{cfg}};
             $(model).find("view").each(function (v) {
+                if (/[\\/]/.test(v.id) || String(v.id).indexOf("..") >= 0) return; // ids name files: never a path
                 if (cfg.views.length && cfg.views.indexOf(v.id) < 0 && !cfg.views.some(function (n) { return n.toLowerCase() === String(v.name).toLowerCase(); })) return;
                 $.model.renderViewToFile(v, cfg.dir + "/" + v.id + ".png", "PNG", { scale: cfg.scale, margin: cfg.margin });
             });
