@@ -10,6 +10,9 @@ public sealed class JiraNamed
 {
     public string? Id { get; set; }
     public string? Name { get; set; }
+
+    /// <summary>On statuses: key new, indeterminate or done.</summary>
+    public JiraKeyRef? StatusCategory { get; set; }
 }
 
 public sealed class JiraKeyRef
@@ -36,6 +39,25 @@ public sealed class JiraAttachment
     public string? Id { get; set; }
     public string? Filename { get; set; }
     public long Size { get; set; }
+    public string? MimeType { get; set; }
+
+    /// <summary>Download URL (needs the same credentials).</summary>
+    public string? Content { get; set; }
+}
+
+public sealed class JiraIssueLinkType
+{
+    public string? Name { get; set; }
+    public string? Inward { get; set; }
+    public string? Outward { get; set; }
+}
+
+/// <summary>One of <c>inwardIssue</c>/<c>outwardIssue</c> is set: the other end of the link.</summary>
+public sealed class JiraIssueLink
+{
+    public JiraIssueLinkType? Type { get; set; }
+    public JiraParent? InwardIssue { get; set; }
+    public JiraParent? OutwardIssue { get; set; }
 }
 
 public sealed class JiraParent
@@ -62,6 +84,10 @@ public sealed class JiraIssueFields
     public List<string>? Labels { get; set; }
     public JiraParent? Parent { get; set; }
     public List<JiraAttachment>? Attachment { get; set; }
+    public List<JiraParent>? Subtasks { get; set; }
+    public List<JiraIssueLink>? Issuelinks { get; set; }
+    public List<JiraNamed>? FixVersions { get; set; }
+    public List<JiraNamed>? Components { get; set; }
     public string? Created { get; set; }
     public string? Updated { get; set; }
 }
@@ -78,6 +104,7 @@ public sealed class JiraSearchResponse
 {
     public List<JiraIssue> Issues { get; set; } = [];
     public int? Total { get; set; }
+    public int? StartAt { get; set; }
     public bool? IsLast { get; set; }
     public string? NextPageToken { get; set; }
 }
@@ -94,6 +121,7 @@ public sealed class JiraCommentPage
 {
     public List<JiraComment> Comments { get; set; } = [];
     public int Total { get; set; }
+    public int StartAt { get; set; }
 }
 
 public sealed class JiraTransition
@@ -112,6 +140,7 @@ public sealed class JiraProject
 {
     public string? Key { get; set; }
     public List<JiraNamed>? IssueTypes { get; set; }
+    public List<JiraNamed>? Versions { get; set; }
 }
 
 public sealed class JiraCreated
@@ -139,6 +168,7 @@ public sealed class JiraCreateFields
     public JiraNamed? Priority { get; set; }
     public JiraKeyRef? Parent { get; set; }
     public JiraUserRef? Assignee { get; set; }
+    public List<JiraNamed>? FixVersions { get; set; }
 }
 
 public sealed class JiraCreateRequest

@@ -20,8 +20,9 @@ public sealed class GitHubTools(GitHubService github)
         string query,
         [Description(Repo)] string? repo = null,
         [Description("Max 50")] int limit = 20,
+        [Description("From the previous result's 'next page'")] int page = 1,
         CancellationToken cancellationToken = default) =>
-        Run("github_search_issues", () => github.SearchAsync(query, repo, limit, cancellationToken));
+        Run("github_search_issues", () => github.SearchAsync(query, repo, limit, page, cancellationToken));
 
     [McpServerTool(Name = "github_get_issue", ReadOnly = true, Idempotent = true)]
     [Description("Get an issue with metadata, body and the latest comments ([comment_id] @author date).")]

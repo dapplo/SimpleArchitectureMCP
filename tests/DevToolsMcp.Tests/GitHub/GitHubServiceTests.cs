@@ -32,7 +32,7 @@ public class GitHubServiceTests
 
         var result = await svc.SearchAsync("is:open label:bug", null, 20, Ct);
 
-        Assert.Equal("#5 | open | Crash on save | bug | @amy | 2026-01-05\n(1 of 7)", result);
+        Assert.Equal("#5 | open | Crash on save | bug | @amy | 2026-01-05\n(1 of 7; next page: 2)", result);
     }
 
     [Fact]
@@ -218,5 +218,16 @@ public class GitHubServiceTests
         var ex = await Assert.ThrowsAsync<ArgumentException>(() => svc.ListLabelsAsync(null, Ct));
         Assert.Contains("repo is required", ex.Message);
         Assert.Throws<ArgumentException>(() => GitHubService.ValidateRepo("../etc"));
+    }
+
+    [Fact]
+    public async Task Search_pages_and_stops_at_the_search_limit()
+    {
+        var (svc, http) = Create();
+        var q = Uri.EscapeDataString("repo:o/r is:issue bug");
+        http.On("GET", $"/search/issues?q={q}&per_page=20&sort=updated&order=desc&page=3", $$"""{"total_count":70,"items":[{{Issue}}]}""");
+
+        Assert.EndsWith("(41 of 70; next page: 4)", await svc.SearchAsync("bug", null, 20, 3, Ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => svc.SearchAsync("bug", null, 50, 21, Ct));
     }
 }

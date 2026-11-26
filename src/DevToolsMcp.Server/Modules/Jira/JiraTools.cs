@@ -17,8 +17,9 @@ public sealed class JiraTools(JiraService jira)
     public Task<string> Search(
         [Description("JQL, an issue key, or plain text")] string jql,
         [Description("Max 50")] int limit = 20,
+        [Description("From the previous result's 'next cursor'")] string? cursor = null,
         CancellationToken cancellationToken = default) =>
-        Run("jira_search", () => jira.SearchAsync(jql, limit, cancellationToken));
+        Run("jira_search", () => jira.SearchAsync(jql, limit, cursor, cancellationToken));
 
     [McpServerTool(Name = "jira_get_issue", ReadOnly = true, Idempotent = true)]
     [Description("Get an issue: fields, Markdown description, latest comments.")]

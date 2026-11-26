@@ -24,6 +24,9 @@ public sealed class GhMilestone
 
 public sealed class GhIssue
 {
+    /// <summary>Database id (sub-issue links use it, not the number).</summary>
+    public long Id { get; set; }
+
     public int Number { get; set; }
     public string? Title { get; set; }
     public string? State { get; set; }
@@ -36,6 +39,7 @@ public sealed class GhIssue
     public int Comments { get; set; }
     public DateTimeOffset? CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
+    public DateTimeOffset? ClosedAt { get; set; }
     public string? HtmlUrl { get; set; }
 
     /// <summary>https://api.github.com/repos/owner/repo (search results span repositories).</summary>
@@ -65,6 +69,33 @@ public sealed class GhComment
     public string? HtmlUrl { get; set; }
 }
 
+public sealed class GhRepo
+{
+    public string? DefaultBranch { get; set; }
+}
+
+public sealed class GhGitObject
+{
+    public string? Sha { get; set; }
+}
+
+public sealed class GhRef
+{
+    public GhGitObject? Object { get; set; }
+}
+
+public sealed class GhContentFile
+{
+    public string? Path { get; set; }
+    public string? HtmlUrl { get; set; }
+    public string? DownloadUrl { get; set; }
+}
+
+public sealed class GhContentResult
+{
+    public GhContentFile? Content { get; set; }
+}
+
 public sealed class GhErrorResponse
 {
     public string? Message { get; set; }
@@ -88,6 +119,12 @@ public sealed class GhErrorDetail
 [JsonSerializable(typeof(List<GhComment>))]
 [JsonSerializable(typeof(GhComment))]
 [JsonSerializable(typeof(List<GhLabel>))]
+[JsonSerializable(typeof(List<GhIssue>))]
+[JsonSerializable(typeof(GhMilestone))]
+[JsonSerializable(typeof(List<GhMilestone>))]
+[JsonSerializable(typeof(GhRepo))]
+[JsonSerializable(typeof(GhRef))]
+[JsonSerializable(typeof(GhContentResult))]
 [JsonSerializable(typeof(GhErrorResponse))]
 [JsonSerializable(typeof(string[]))] // array tool parameters (labels, assignees)
 public sealed partial class GitHubJsonContext : JsonSerializerContext;

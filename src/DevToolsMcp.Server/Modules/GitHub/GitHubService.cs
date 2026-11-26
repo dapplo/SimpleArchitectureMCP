@@ -25,7 +25,12 @@ public sealed partial class GitHubService
 
     private GitHubApi Api => _api();
 
-    public async Task<string> SearchAsync(string query, string? repo, int limit, CancellationToken ct)
+    public Task<string> SearchAsync(string query, string? repo, int limit, CancellationToken ct) => SearchAsync(query, repo, limit, 1, ct);
+
+    /// <summary>GitHub search returns at most 1,000 results per query.</summary>
+    public const int MaxSearchResults = 1000;
+
+    public async Task<string> SearchAsync(string query, string? repo, int limit, int page, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -47,7 +52,14 @@ public sealed partial class GitHubService
             q = $"repo:{scope} {q}";
         }
 
-        var result = await api.SearchIssuesAsync(q, Math.Clamp(limit, 1, MaxSearchLimit), ct).ConfigureAwait(false);
+        var perPage = Math.Clamp(limit, 1, MaxSearchLimit);
+        var p = Math.Max(1, page);
+        if ((p - 1) * perPage >= MaxSearchResults)
+        {
+            throw new ArgumentException($"GitHub search stops at {MaxSearchResults} results; narrow the query (e.g. created:2024-01-01..2024-06-30).");
+        }
+
+        var result = await api.SearchIssuesAsync(q, perPage, p, "updated", "desc", ct).ConfigureAwait(false);
         if (result.Items.Count == 0)
         {
             return "No results.";
@@ -65,9 +77,10 @@ public sealed partial class GitHubService
                 .Append(" | ").Append(Day(i.UpdatedAt)).Append('\n');
         }
 
-        if (result.TotalCount > result.Items.Count)
+        var seen = (p - 1) * perPage + result.Items.Count;
+        if (result.TotalCount > seen)
         {
-            sb.Append($"({result.Items.Count} of {result.TotalCount})");
+            sb.Append(seen < MaxSearchResults ? $"({seen} of {result.TotalCount}; next page: {p + 1})" : $"({seen} of {result.TotalCount}; narrow the query for the rest)");
         }
 
         return sb.ToString().TrimEnd();
