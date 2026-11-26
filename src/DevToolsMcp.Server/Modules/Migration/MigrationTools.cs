@@ -13,7 +13,7 @@ namespace DevToolsMcp.Server.Modules.Migration;
 [McpServerToolType]
 public sealed class MigrationTools(MigrationService migration)
 {
-    [McpServerTool(Name = "migrate_issues")]
+    [McpServerTool(Name = "migrate_issues", Destructive = false)]
     [Description("Copy issues Jira→GitHub or GitHub→Jira with all comments, labels, status, assignee, milestone and attachments. "
                  + "Already copied issues are skipped; an interrupted run resumes. One line per issue.")]
     public Task<string> Migrate(

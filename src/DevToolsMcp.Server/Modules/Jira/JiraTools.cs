@@ -17,11 +17,11 @@ public sealed class JiraTools(JiraService jira)
     [McpServerTool(Name = "jira_search", ReadOnly = true, Idempotent = true)]
     [Description("Search issues. Returns lines: key | type | status | assignee | updated | summary.")]
     public Task<string> Search(
-        [Description("JQL, an issue key, or plain text")] string jql,
+        [Description("JQL, an issue key, or plain text")] string query,
         [Description("Max 50")] int limit = 20,
         [Description("From the previous result's 'next cursor'")] string? cursor = null,
         CancellationToken cancellationToken = default) =>
-        ToolErrors.RunAsync("jira_search", Service, () => jira.SearchAsync(jql, limit, cursor, cancellationToken), cancellationToken);
+        ToolErrors.RunAsync("jira_search", Service, () => jira.SearchAsync(query, limit, cursor, cancellationToken), cancellationToken);
 
     [McpServerTool(Name = "jira_get_issue", ReadOnly = true, Idempotent = true)]
     [Description("Get an issue: fields, Markdown description, latest comments.")]
@@ -31,7 +31,7 @@ public sealed class JiraTools(JiraService jira)
         CancellationToken cancellationToken = default) =>
         ToolErrors.RunAsync("jira_get_issue", Service, () => jira.GetIssueAsync(issue_key, comments, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "jira_create_issue")]
+    [McpServerTool(Name = "jira_create_issue", Destructive = false)]
     [Description("Create an issue. Returns key and URL.")]
     public Task<string> CreateIssue(
         string project_key,
@@ -68,7 +68,7 @@ public sealed class JiraTools(JiraService jira)
         CancellationToken cancellationToken = default) =>
         ToolErrors.RunAsync("jira_transition_issue", Service, () => jira.TransitionAsync(issue_key, transition, comment, resolution, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "jira_add_comment")]
+    [McpServerTool(Name = "jira_add_comment", Destructive = false)]
     [Description("Add a Markdown comment to an issue.")]
     public Task<string> AddComment(
         string issue_key,
@@ -76,11 +76,11 @@ public sealed class JiraTools(JiraService jira)
         CancellationToken cancellationToken = default) =>
         ToolErrors.RunAsync("jira_add_comment", Service, () => jira.AddCommentAsync(issue_key, body, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "jira_attach_file")]
+    [McpServerTool(Name = "jira_attach_file", Destructive = false)]
     [Description("Attach a local file to an issue.")]
     public Task<string> AttachFile(
         string issue_key,
-        [Description("Absolute path")] string file_path,
+        [Description("Absolute path")] string file,
         CancellationToken cancellationToken = default) =>
-        ToolErrors.RunAsync("jira_attach_file", Service, () => jira.AttachFileAsync(issue_key, file_path, cancellationToken), cancellationToken);
+        ToolErrors.RunAsync("jira_attach_file", Service, () => jira.AttachFileAsync(issue_key, file, cancellationToken), cancellationToken);
 }

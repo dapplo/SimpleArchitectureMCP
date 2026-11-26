@@ -34,7 +34,7 @@ public sealed class GitHubTools(GitHubService github)
         CancellationToken cancellationToken = default) =>
         ToolErrors.RunAsync("github_get_issue", Service, () => github.GetIssueAsync(repo, number, comments, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "github_create_issue")]
+    [McpServerTool(Name = "github_create_issue", Destructive = false)]
     [Description("Create an issue (Markdown body). Returns its number and URL.")]
     public Task<string> CreateIssue(
         string title,

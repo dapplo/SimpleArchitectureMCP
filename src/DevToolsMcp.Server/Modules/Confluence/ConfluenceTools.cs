@@ -48,37 +48,37 @@ public sealed class ConfluenceTools(ConfluenceService confluence)
         CancellationToken cancellationToken = default) =>
         ToolErrors.RunAsync("confluence_get_page_children", Service, () => confluence.GetChildrenAsync(page_id, limit, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "confluence_create_page")]
+    [McpServerTool(Name = "confluence_create_page", Destructive = false)]
     [Description("Create a page from Markdown. Returns id and URL.")]
     public Task<string> CreatePage(
         string space_key,
         string title,
-        string markdown_body,
+        [Description("Markdown")] string body,
         [Description("Parent page id")] string? parent_id = null,
         CancellationToken cancellationToken = default) =>
-        ToolErrors.RunAsync("confluence_create_page", Service, () => confluence.CreatePageAsync(space_key, parent_id, title, markdown_body, cancellationToken), cancellationToken);
+        ToolErrors.RunAsync("confluence_create_page", Service, () => confluence.CreatePageAsync(space_key, parent_id, title, body, cancellationToken), cancellationToken);
 
     [McpServerTool(Name = "confluence_update_page", Idempotent = true)]
     [Description("Replace a page body; version is incremented automatically. Omit title to keep it.")]
     public Task<string> UpdatePage(
         string page_id,
-        [Description("Markdown, or storage XHTML if format=storage")] string markdown_body,
+        [Description("Markdown, or storage XHTML if format=storage")] string body,
         string? title = null,
         [Description("markdown or storage")] string format = "markdown",
         string? version_message = null,
         CancellationToken cancellationToken = default) =>
-        ToolErrors.RunAsync("confluence_update_page", Service, () => confluence.UpdatePageAsync(page_id, title, markdown_body, format, version_message, cancellationToken), cancellationToken);
+        ToolErrors.RunAsync("confluence_update_page", Service, () => confluence.UpdatePageAsync(page_id, title, body, format, version_message, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "confluence_append_to_page")]
+    [McpServerTool(Name = "confluence_append_to_page", Destructive = false)]
     [Description("Append Markdown to the end of a page without resending its body. Existing macros are preserved.")]
     public Task<string> AppendToPage(
         string page_id,
-        string markdown_snippet,
+        [Description("Markdown")] string body,
         string? version_message = null,
         CancellationToken cancellationToken = default) =>
-        ToolErrors.RunAsync("confluence_append_to_page", Service, () => confluence.AppendToPageAsync(page_id, markdown_snippet, version_message, cancellationToken), cancellationToken);
+        ToolErrors.RunAsync("confluence_append_to_page", Service, () => confluence.AppendToPageAsync(page_id, body, version_message, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "confluence_add_drawio")]
+    [McpServerTool(Name = "confluence_add_drawio", Destructive = false)]
     [Description("Upload a .drawio file to a page and show it with the draw.io macro (draw.io app required). Re-running updates the diagram in place.")]
     public Task<string> AddDrawio(
         string page_id,

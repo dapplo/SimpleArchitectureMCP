@@ -121,9 +121,9 @@ tests/DevToolsMcp.Tests/         xUnit v3 tests, grouped by slice
 | `confluence_get_page` | `page_id`, `format` (`markdown` \| `storage`) | Front matter (`id`, `title`, `version`) + body |
 | `confluence_export_page` | `page_id`, `save_to` (`.md` file or folder), `format`, `overwrite` (false: a file that is not an earlier export is kept) | `Saved <id> '<title>' v<n> to <path> (<n> KB).` (the body stays out of the conversation) |
 | `confluence_get_page_children` | `page_id`, `limit` (25) | `id \| title` per child |
-| `confluence_create_page` | `space_key`, `title`, `markdown_body`, `parent_id?` | `Created <id> \| <title> \| <url>` |
-| `confluence_update_page` | `page_id`, `markdown_body`, `title?`, `format`, `version_message?` | `Updated <id> to version <n>.` |
-| `confluence_append_to_page` | `page_id`, `markdown_snippet`, `version_message?` | `Appended to <id>; now version <n>.` |
+| `confluence_create_page` | `space_key`, `title`, `body` (Markdown), `parent_id?` | `Created <id> \| <title> \| <url>` |
+| `confluence_update_page` | `page_id`, `body` (Markdown, or storage XHTML with `format=storage`), `title?`, `format`, `version_message?` | `Updated <id> to version <n>.` |
+| `confluence_append_to_page` | `page_id`, `body` (Markdown), `version_message?` | `Appended to <id>; now version <n>.` |
 | `confluence_add_drawio` | `page_id`, `file` (`.drawio`), `name?` (default the file name), `png?` (preview) | `Added\|Updated draw.io diagram '<name>' (attachment v<n>) on <id>; page version <n>.` |
 
 Plain-text queries become `type = page AND text ~ "..."`; queries that already contain CQL operators pass through unchanged. `space_key` is validated and AND-ed in front, and any `ORDER BY` stays at the end.
@@ -160,13 +160,13 @@ Basic issue work with your own Jira permissions. There are no admin tools (no pr
 
 | Tool | Inputs | Returns |
 | --- | --- | --- |
-| `jira_search` | `jql` (JQL, an issue key, or plain text), `limit` (20, max 50), `cursor?` | `key \| type \| status \| assignee \| yyyy-MM-dd \| summary` per issue, then `next cursor: …` when there are more |
+| `jira_search` | `query` (JQL, an issue key, or plain text), `limit` (20, max 50), `cursor?` | `key \| type \| status \| assignee \| yyyy-MM-dd \| summary` per issue, then `next cursor: …` when there are more |
 | `jira_get_issue` | `issue_key`, `comments` (5, max 50) | Front matter (key, summary, type, status, priority, assignee, labels, parent, subtasks, links, fix versions, components, url, attachments, …) + Markdown description + latest comments |
 | `jira_create_issue` | `project_key`, `summary`, `issue_type` (`Task`), `description?`, `assignee?`, `labels?`, `priority?`, `parent_key?` | `Created <key> \| <url>` |
 | `jira_update_issue` | `issue_key`, `summary?`, `description?`, `priority?`, `add_labels?`, `remove_labels?`, `assignee?` | `Updated <key>: <changed fields>.` |
 | `jira_transition_issue` | `issue_key`, `transition?`, `comment?`, `resolution?` | Without `transition`: `id \| name → status` per available transition. With it: `<key> → <status>.` |
 | `jira_add_comment` | `issue_key`, `body` | `Commented on <key>.` |
-| `jira_attach_file` | `issue_key`, `file_path` | `Attached <name> (<size>) to <key>.` |
+| `jira_attach_file` | `issue_key`, `file` | `Attached <name> (<size>) to <key>.` |
 
 * **Markdown in, Markdown out.** Descriptions and comments are written and read as Markdown and converted to and from Jira wiki markup. Both Cloud and Data Center use REST API v2, which stores wiki markup, so there is no Atlassian Document Format JSON in the prompt.
 * **Close an issue** with `jira_transition_issue` and `transition=Done` (or the transition's name or id, or the target status). Pass `resolution` if your workflow asks for one. A wrong name returns the list of valid transitions.
