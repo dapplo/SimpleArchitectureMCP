@@ -30,6 +30,11 @@ public static class InlineParser
                     i += 2;
                     continue;
 
+                case '&' when HtmlEntities.TryDecode(s, i, out var entity, out var entityLength):
+                    text.Append(entity);
+                    i += entityLength;
+                    continue;
+
                 case '\n':
                     Flush();
                     result.Add(new MdLineBreak());
