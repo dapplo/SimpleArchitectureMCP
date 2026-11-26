@@ -41,7 +41,8 @@ public static class LocalSavePath
             candidates.Add(Path.GetFullPath(fileTarget.FullName));
         }
 
-        for (var dir = file.Directory; dir is not null; dir = dir.Parent)
+        // Drive and file-system roots are never links, and Windows can't resolve a link target for "D:\\".
+        for (var dir = file.Directory; dir?.Parent is not null; dir = dir.Parent)
         {
             if (dir.Exists && dir.ResolveLinkTarget(returnFinalTarget: true) is { } dirTarget)
             {
