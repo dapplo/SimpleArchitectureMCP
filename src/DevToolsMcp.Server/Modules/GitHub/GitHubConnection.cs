@@ -46,4 +46,4 @@ public sealed class GitHubConnection : IDisposable
 }
 
 public sealed class GitHubNotConfiguredException(string reason)
-    : InvalidOperationException($"GitHub is not configured ({reason}). Open the devtools-mcp settings page.");
+    : InvalidOperationException($"GitHub is not configured ({reason}). Open the devtools-mcp settings page."), Core.Tools.IToolError;

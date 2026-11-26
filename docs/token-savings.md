@@ -23,12 +23,12 @@ Fewer tokens also mean faster answers, less pressure on the context window (so l
 These come from the core, so each new provider gets them for free:
 
 * **Unconfigured modules cost zero tokens.** Their tools are hidden from `tools/list` until the module has valid settings, and they appear the moment you save the settings page (no restart).
-* **Few, terse tools.** Each provider has about six tools with short descriptions and flat, primitive parameters. Related operations are merged where it makes sense, for example one `github_update_issue` for edit, close, labels and assignees.
+* **Few, terse tools.** Each provider has six to eight tools with short descriptions and flat, primitive parameters. Related operations are merged where it makes sense, for example one `github_update_issue` for edit, close, labels and assignees.
 * **Lean results.** DTOs map only the fields that are printed, and everything else is dropped while deserializing. Lists come back as one `id | title | …` line per item, and documents as Markdown with a small front matter.
 * **Short errors.** Failures become one actionable sentence ("GitHub API 404: Not Found (missing, or the token has no access)"), not an HTML error page or stack trace.
 * **Measurable.** The `devtools.mcp.tool.output.size` metric records how many characters each tool call returned (see [Measure it yourself](#measure-it-yourself)).
 
-Some benefits have nothing to do with tokens: it runs locally with your own permissions, binds to loopback only, keeps tokens in a per-user settings file, and ships as a single ~24 MB native executable that starts in well under 100 ms.
+Some benefits have nothing to do with tokens: it runs locally with your own permissions, binds to loopback only, keeps tokens in a per-user settings file, and ships as a single ~28 MB native executable (linux-x64) that answers `/health` about 0.1 s after launch.
 
 ## Confluence
 
@@ -36,9 +36,9 @@ Some benefits have nothing to do with tokens: it runs locally with your own perm
 
 | Setup | Tools | Size | ≈ Tokens |
 | --- | --- | --- | --- |
-| devtools-mcp Confluence module | 6 | 2.3 KB | ~575 |
+| devtools-mcp Confluence module | 8 | 3.4 KB | ~840 |
 
-Measured the same way as for GitHub (compact name, description and input schema). Only the six page tools exist: search, get, children, create, update and append. There are no space-admin, permission, attachment-admin or user tools to pay for.
+Measured the same way as for GitHub (compact name, description and input schema). The eight tools are search, get, export (to a local file), children, create, update, append and add draw.io diagram (listed only when the draw.io app is installed). There are no space-admin, permission, attachment-admin or user tools to pay for.
 
 ### Variable cost: what each call returns
 
@@ -68,7 +68,7 @@ Confluence's REST API is especially wasteful for a model, for two reasons:
 
 | Setup | Tools | Size | ≈ Tokens |
 | --- | --- | --- | --- |
-| devtools-mcp Jira module | 7 | 3.1 KB | ~780 |
+| devtools-mcp Jira module | 7 | 3.2 KB | ~800 |
 
 This is measured the same way as GitHub: compact name, description and input schema. The seven tools are search, get, create, update (which also covers assignee and labels), transition (including close), comment and attach. There are no project, workflow, scheme, permission or user-admin tools to pay for. We haven't compared against the schemas of other Jira MCP servers.
 
@@ -105,7 +105,7 @@ Measured as the compact JSON of each tool's name, description and input schema (
 
 | Setup | Tools | Size | ≈ Tokens |
 | --- | --- | --- | --- |
-| devtools-mcp GitHub module | 6 | 3.2 KB | ~800 |
+| devtools-mcp GitHub module | 6 | 3.3 KB | ~810 |
 | Official GitHub MCP server, `issues` toolset only | 10 | 14.1 KB | ~3,500 |
 | Official GitHub MCP server, default toolsets (context, repos, issues, pull requests, users) | 45 | 46.4 KB | ~11,600 |
 

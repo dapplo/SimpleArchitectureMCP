@@ -70,7 +70,7 @@ public static class ConfluenceModule
                         ? null
                         : "The draw.io app is not available on this Confluence (Confluence:DiagramApps).";
                 }
-                catch (Exception ex) when (ex is ConfluenceApiException or HttpRequestException or OperationCanceledException && !ct.IsCancellationRequested)
+                catch (Exception) when (!ct.IsCancellationRequested)
                 {
                     return null; // detection failed (offline, timeout): keep the tool; a real call reports the problem
                 }

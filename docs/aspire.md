@@ -75,7 +75,7 @@ From the command line, the same proxy is handy for testing tools without any AI 
 
 ```bash
 aspire mcp tools                         # list tools of running resources (add --format Json for schemas)
-aspire mcp call devtools-mcp jira_search --input '{"jql":"assignee = currentUser()","limit":5}'
+aspire mcp call devtools-mcp jira_search --input '{"query":"assignee = currentUser()","limit":5}'
 aspire mcp call devtools-mcp confluence_get_page --input '{"page_id":"123456"}'
 ```
 

@@ -32,7 +32,7 @@ public sealed record ConfluenceAttachment(string Id, string Title, int Version);
 
 public sealed record ConfluencePageRef(string Id, string Title, string? WebUrl = null);
 
-public sealed class ConfluenceApiException(HttpStatusCode status, string message) : Exception(message)
+public sealed class ConfluenceApiException(HttpStatusCode status, string message) : Exception(message), Core.Tools.IToolError
 {
     public HttpStatusCode Status { get; } = status;
 }

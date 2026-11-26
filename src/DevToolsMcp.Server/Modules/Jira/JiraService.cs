@@ -33,7 +33,7 @@ public sealed partial class JiraService
     {
         if (string.IsNullOrWhiteSpace(query))
         {
-            throw new ArgumentException("jql is required.");
+            throw new ArgumentException("query is required.");
         }
 
         var result = await Api.SearchAsync(JiraJql.Build(query), Math.Clamp(limit, 1, MaxSearchLimit), Blank(cursor), ct).ConfigureAwait(false);

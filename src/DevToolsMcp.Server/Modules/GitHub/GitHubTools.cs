@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using DevToolsMcp.Server.Core.Telemetry;
+using DevToolsMcp.Server.Core.Tools;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
@@ -12,6 +12,7 @@ namespace DevToolsMcp.Server.Modules.GitHub;
 [McpServerToolType]
 public sealed class GitHubTools(GitHubService github)
 {
+    private const string Service = "GitHub";
     private const string Repo = "owner/repo";
 
     [McpServerTool(Name = "github_search_issues", ReadOnly = true, Idempotent = true)]
@@ -22,7 +23,7 @@ public sealed class GitHubTools(GitHubService github)
         [Description("Max 50")] int limit = 20,
         [Description("From the previous result's 'next page'")] int page = 1,
         CancellationToken cancellationToken = default) =>
-        Run("github_search_issues", () => github.SearchAsync(query, repo, limit, page, cancellationToken));
+        ToolErrors.RunAsync("github_search_issues", Service, () => github.SearchAsync(query, repo, limit, page, cancellationToken), cancellationToken);
 
     [McpServerTool(Name = "github_get_issue", ReadOnly = true, Idempotent = true)]
     [Description("Get an issue with metadata, body and the latest comments ([comment_id] @author date).")]
@@ -31,9 +32,9 @@ public sealed class GitHubTools(GitHubService github)
         [Description(Repo)] string? repo = null,
         [Description("Latest comments to include, 0-100")] int comments = 20,
         CancellationToken cancellationToken = default) =>
-        Run("github_get_issue", () => github.GetIssueAsync(repo, number, comments, cancellationToken));
+        ToolErrors.RunAsync("github_get_issue", Service, () => github.GetIssueAsync(repo, number, comments, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "github_create_issue")]
+    [McpServerTool(Name = "github_create_issue", Destructive = false)]
     [Description("Create an issue (Markdown body). Returns its number and URL.")]
     public Task<string> CreateIssue(
         string title,
@@ -43,9 +44,9 @@ public sealed class GitHubTools(GitHubService github)
         [Description("Logins")] string[]? assignees = null,
         [Description("Milestone number")] int? milestone = null,
         CancellationToken cancellationToken = default) =>
-        Run("github_create_issue", () => github.CreateIssueAsync(repo, title, body, labels, assignees, milestone, cancellationToken));
+        ToolErrors.RunAsync("github_create_issue", Service, () => github.CreateIssueAsync(repo, title, body, labels, assignees, milestone, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "github_update_issue")]
+    [McpServerTool(Name = "github_update_issue", Idempotent = true)]
     [Description("Edit, close/reopen, label or assign an issue. Only given fields change; body replaces the description.")]
     public Task<string> UpdateIssue(
         int number,
@@ -60,8 +61,8 @@ public sealed class GitHubTools(GitHubService github)
         [Description("Logins")] string[]? add_assignees = null,
         [Description("Logins")] string[]? remove_assignees = null,
         CancellationToken cancellationToken = default) =>
-        Run("github_update_issue", () => github.UpdateIssueAsync(repo, number, title, body, state, state_reason, milestone,
-            add_labels, remove_labels, add_assignees, remove_assignees, cancellationToken));
+        ToolErrors.RunAsync("github_update_issue", Service, () => github.UpdateIssueAsync(repo, number, title, body, state, state_reason, milestone,
+            add_labels, remove_labels, add_assignees, remove_assignees, cancellationToken), cancellationToken);
 
     [McpServerTool(Name = "github_comment")]
     [Description("Comment on an issue (Markdown), or replace your comment's text when comment_id is given.")]
@@ -71,25 +72,12 @@ public sealed class GitHubTools(GitHubService github)
         [Description(Repo)] string? repo = null,
         long? comment_id = null,
         CancellationToken cancellationToken = default) =>
-        Run("github_comment", () => github.CommentAsync(repo, number, body, comment_id, cancellationToken));
+        ToolErrors.RunAsync("github_comment", Service, () => github.CommentAsync(repo, number, body, comment_id, cancellationToken), cancellationToken);
 
     [McpServerTool(Name = "github_list_labels", ReadOnly = true, Idempotent = true)]
     [Description("List the repository's labels (name | description).")]
     public Task<string> ListLabels(
         [Description(Repo)] string? repo = null,
         CancellationToken cancellationToken = default) =>
-        Run("github_list_labels", () => github.ListLabelsAsync(repo, cancellationToken));
-
-    /// <summary>Maps failures to concise MCP tool errors and records the output size.</summary>
-    private static async Task<string> Run(string tool, Func<Task<string>> action)
-    {
-        try
-        {
-            return DevToolsTelemetry.Output(tool, await action().ConfigureAwait(false));
-        }
-        catch (Exception ex) when (ex is GitHubApiException or GitHubNotConfiguredException or ArgumentException or HttpRequestException or TimeoutException)
-        {
-            throw new McpException(ex.Message, ex);
-        }
-    }
+        ToolErrors.RunAsync("github_list_labels", Service, () => github.ListLabelsAsync(repo, cancellationToken), cancellationToken);
 }

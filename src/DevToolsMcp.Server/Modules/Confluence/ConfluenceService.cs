@@ -143,7 +143,7 @@ public sealed partial class ConfluenceService
     {
         if (string.IsNullOrWhiteSpace(markdownSnippet))
         {
-            throw new ArgumentException("markdown_snippet is required.");
+            throw new ArgumentException("body is required.");
         }
 
         var id = ValidateId(pageId);

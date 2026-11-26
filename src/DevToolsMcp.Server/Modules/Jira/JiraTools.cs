@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using DevToolsMcp.Server.Core.Telemetry;
+using DevToolsMcp.Server.Core.Tools;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
@@ -12,14 +12,16 @@ namespace DevToolsMcp.Server.Modules.Jira;
 [McpServerToolType]
 public sealed class JiraTools(JiraService jira)
 {
+    private const string Service = "Jira";
+
     [McpServerTool(Name = "jira_search", ReadOnly = true, Idempotent = true)]
     [Description("Search issues. Returns lines: key | type | status | assignee | updated | summary.")]
     public Task<string> Search(
-        [Description("JQL, an issue key, or plain text")] string jql,
+        [Description("JQL, an issue key, or plain text")] string query,
         [Description("Max 50")] int limit = 20,
         [Description("From the previous result's 'next cursor'")] string? cursor = null,
         CancellationToken cancellationToken = default) =>
-        Run("jira_search", () => jira.SearchAsync(jql, limit, cursor, cancellationToken));
+        ToolErrors.RunAsync("jira_search", Service, () => jira.SearchAsync(query, limit, cursor, cancellationToken), cancellationToken);
 
     [McpServerTool(Name = "jira_get_issue", ReadOnly = true, Idempotent = true)]
     [Description("Get an issue: fields, Markdown description, latest comments.")]
@@ -27,9 +29,9 @@ public sealed class JiraTools(JiraService jira)
         string issue_key,
         [Description("Latest comments to include, 0-50")] int comments = 5,
         CancellationToken cancellationToken = default) =>
-        Run("jira_get_issue", () => jira.GetIssueAsync(issue_key, comments, cancellationToken));
+        ToolErrors.RunAsync("jira_get_issue", Service, () => jira.GetIssueAsync(issue_key, comments, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "jira_create_issue")]
+    [McpServerTool(Name = "jira_create_issue", Destructive = false)]
     [Description("Create an issue. Returns key and URL.")]
     public Task<string> CreateIssue(
         string project_key,
@@ -41,7 +43,7 @@ public sealed class JiraTools(JiraService jira)
         string? priority = null,
         [Description("Parent issue key (sub-tasks)")] string? parent_key = null,
         CancellationToken cancellationToken = default) =>
-        Run("jira_create_issue", () => jira.CreateIssueAsync(project_key, summary, issue_type, description, assignee, labels, priority, parent_key, cancellationToken));
+        ToolErrors.RunAsync("jira_create_issue", Service, () => jira.CreateIssueAsync(project_key, summary, issue_type, description, assignee, labels, priority, parent_key, cancellationToken), cancellationToken);
 
     [McpServerTool(Name = "jira_update_issue", Idempotent = true)]
     [Description("Edit an issue; only the given fields change. Also assigns and adds/removes labels.")]
@@ -54,7 +56,7 @@ public sealed class JiraTools(JiraService jira)
         string[]? remove_labels = null,
         [Description("me, none, username, email or name")] string? assignee = null,
         CancellationToken cancellationToken = default) =>
-        Run("jira_update_issue", () => jira.UpdateIssueAsync(issue_key, summary, description, priority, add_labels, remove_labels, assignee, cancellationToken));
+        ToolErrors.RunAsync("jira_update_issue", Service, () => jira.UpdateIssueAsync(issue_key, summary, description, priority, add_labels, remove_labels, assignee, cancellationToken), cancellationToken);
 
     [McpServerTool(Name = "jira_transition_issue")]
     [Description("Change status (e.g. close: transition=Done). Omit transition to list the available ones.")]
@@ -64,35 +66,21 @@ public sealed class JiraTools(JiraService jira)
         [Description("Markdown comment to add")] string? comment = null,
         [Description("e.g. Fixed, Won't Do, if the workflow asks for one")] string? resolution = null,
         CancellationToken cancellationToken = default) =>
-        Run("jira_transition_issue", () => jira.TransitionAsync(issue_key, transition, comment, resolution, cancellationToken));
+        ToolErrors.RunAsync("jira_transition_issue", Service, () => jira.TransitionAsync(issue_key, transition, comment, resolution, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "jira_add_comment")]
+    [McpServerTool(Name = "jira_add_comment", Destructive = false)]
     [Description("Add a Markdown comment to an issue.")]
     public Task<string> AddComment(
         string issue_key,
         string body,
         CancellationToken cancellationToken = default) =>
-        Run("jira_add_comment", () => jira.AddCommentAsync(issue_key, body, cancellationToken));
+        ToolErrors.RunAsync("jira_add_comment", Service, () => jira.AddCommentAsync(issue_key, body, cancellationToken), cancellationToken);
 
-    [McpServerTool(Name = "jira_attach_file")]
+    [McpServerTool(Name = "jira_attach_file", Destructive = false)]
     [Description("Attach a local file to an issue.")]
     public Task<string> AttachFile(
         string issue_key,
-        [Description("Absolute path")] string file_path,
+        [Description("Absolute path")] string file,
         CancellationToken cancellationToken = default) =>
-        Run("jira_attach_file", () => jira.AttachFileAsync(issue_key, file_path, cancellationToken));
-
-    /// <summary>Maps failures to concise MCP tool errors and records the output size.</summary>
-    private static async Task<string> Run(string tool, Func<Task<string>> action)
-    {
-        try
-        {
-            return DevToolsTelemetry.Output(tool, await action().ConfigureAwait(false));
-        }
-        catch (Exception ex) when (ex is JiraApiException or JiraNotConfiguredException or ArgumentException or HttpRequestException
-                                       or TimeoutException or IOException or UnauthorizedAccessException)
-        {
-            throw new McpException(ex.Message, ex);
-        }
-    }
+        ToolErrors.RunAsync("jira_attach_file", Service, () => jira.AttachFileAsync(issue_key, file, cancellationToken), cancellationToken);
 }

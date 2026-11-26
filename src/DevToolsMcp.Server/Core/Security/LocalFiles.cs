@@ -14,7 +14,7 @@ public static class LocalFiles
     /// hidden file or folder (~/.ssh, ~/.aws, ~/.config/devtools-mcp, .env, ...) or in Windows AppData, also after
     /// following symbolic links anywhere along the path. This keeps prompt-injected content from talking the model into uploading credentials.
     /// </summary>
-    public static FileInfo ValidateUpload(string? filePath, long maxBytes, Func<long, string> size, string parameter = "file_path")
+    public static FileInfo ValidateUpload(string? filePath, long maxBytes, Func<long, string> size, string parameter = "file")
     {
         if (string.IsNullOrWhiteSpace(filePath))
         {
