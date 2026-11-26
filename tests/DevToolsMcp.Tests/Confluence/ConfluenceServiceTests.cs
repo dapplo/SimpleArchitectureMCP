@@ -91,25 +91,6 @@ public class ConfluenceServiceTests
         Assert.Equal("---\nid: 7\ntitle: Existing title\nversion: 4\n---\nkeep\n\n**[Confluence Macro: jira | key=X-1]**", md);
     }
 
-    [Fact]
-    public async Task Search_and_children_are_compact()
-    {
-        var svc = new ConfluenceService(new FakeAdapter());
-        Assert.Equal("1 | A | OPS | 2026-01-01\n  ex\n2 | B | - | -", await svc.SearchAsync("q", null, 100, Ct));
-        Assert.Equal("8 | Child", await svc.GetChildrenAsync("7", 25, Ct));
-    }
-
-    [Theory]
-    [InlineData("abc")]
-    [InlineData("1/../2")]
-    [InlineData("")]
-    public async Task Rejects_non_numeric_page_ids(string id) =>
-        await Assert.ThrowsAsync<ArgumentException>(() => new ConfluenceService(new FakeAdapter()).GetPageAsync(id, null, Ct));
-
-    [Fact]
-    public async Task Rejects_unknown_format() =>
-        await Assert.ThrowsAsync<ArgumentException>(() => new ConfluenceService(new FakeAdapter()).GetPageAsync("7", "html", Ct));
-
     // Not the temp folder: on Windows that lives under AppData, which the save guard refuses.
     private static string NewSaveDir() => Path.Combine(AppContext.BaseDirectory, "save-tests", Guid.NewGuid().ToString("N"));
 
@@ -153,4 +134,23 @@ public class ConfluenceServiceTests
         await Assert.ThrowsAsync<ArgumentException>(() => new ConfluenceService(new FakeAdapter()).GetPageAsync("7", null, path, Ct));
         Assert.False(File.Exists(path));
     }
+
+    [Fact]
+    public async Task Search_and_children_are_compact()
+    {
+        var svc = new ConfluenceService(new FakeAdapter());
+        Assert.Equal("1 | A | OPS | 2026-01-01\n  ex\n2 | B | - | -", await svc.SearchAsync("q", null, 100, Ct));
+        Assert.Equal("8 | Child", await svc.GetChildrenAsync("7", 25, Ct));
+    }
+
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("1/../2")]
+    [InlineData("")]
+    public async Task Rejects_non_numeric_page_ids(string id) =>
+        await Assert.ThrowsAsync<ArgumentException>(() => new ConfluenceService(new FakeAdapter()).GetPageAsync(id, null, Ct));
+
+    [Fact]
+    public async Task Rejects_unknown_format() =>
+        await Assert.ThrowsAsync<ArgumentException>(() => new ConfluenceService(new FakeAdapter()).GetPageAsync("7", "html", Ct));
 }
