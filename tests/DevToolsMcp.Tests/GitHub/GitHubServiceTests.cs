@@ -139,11 +139,11 @@ public class GitHubServiceTests
     public async Task Create_sends_only_given_fields()
     {
         var (svc, http) = Create(defaultRepo: null);
-        http.On("POST", "/repos/dapplo/SimpleMCP/issues", Issue, HttpStatusCode.Created);
+        http.On("POST", "/repos/dapplo/SimpleArchitectureMCP/issues", Issue, HttpStatusCode.Created);
 
-        var result = await svc.CreateIssueAsync("https://github.com/dapplo/SimpleMCP.git", " New ", null, ["bug", "bug", " "], ["@amy"], null, Ct);
+        var result = await svc.CreateIssueAsync("https://github.com/dapplo/SimpleArchitectureMCP.git", " New ", null, ["bug", "bug", " "], ["@amy"], null, Ct);
 
-        Assert.Equal("Created dapplo/SimpleMCP#5 | https://github.com/o/r/issues/5", result);
+        Assert.Equal("Created dapplo/SimpleArchitectureMCP#5 | https://github.com/o/r/issues/5", result);
         Assert.Equal("""{"title":"New","labels":["bug"],"assignees":["amy"]}""", http.Requests.Single().Body);
     }
 

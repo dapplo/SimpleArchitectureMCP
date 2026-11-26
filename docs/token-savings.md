@@ -120,7 +120,7 @@ Measured against the live API on 2026-11-25, comparing the raw REST response wit
 | Call | Raw GitHub API | devtools-mcp | Smaller by |
 | --- | --- | --- | --- |
 | Search, 20 open issues (`dotnet/runtime`, label filter) | 183 KB | 3.6 KB | ~50× |
-| One issue with its comments (`dapplo/SimpleMCP#1`, 6 KB body) | 17.4 KB | 6.9 KB | 2.5× (overhead 11.4 KB → 0.9 KB) |
+| One issue with its comments (`dapplo/SimpleArchitectureMCP#1`, 6 KB body) | 17.4 KB | 6.9 KB | 2.5× (overhead 11.4 KB → 0.9 KB) |
 | Repository labels (9 labels) | 2.9 KB | 0.4 KB | 7× |
 
 Where the savings come from:

@@ -28,17 +28,17 @@ public class ConversionReferenceTests
         Assert.Equal(key, JiraService.ParseIssueReference(reference));
 
     [Theory]
-    [InlineData("dapplo/SimpleMCP#9", "dapplo/SimpleMCP", 9)]
+    [InlineData("dapplo/SimpleArchitectureMCP#9", "dapplo/SimpleArchitectureMCP", 9)]
     [InlineData("#12", null, 12)]
     [InlineData("12", null, 12)]
-    [InlineData("https://github.com/dapplo/SimpleMCP/pull/8", "dapplo/SimpleMCP", 8)]
+    [InlineData("https://github.com/dapplo/SimpleArchitectureMCP/pull/8", "dapplo/SimpleArchitectureMCP", 8)]
     [InlineData("https://github.example.com/team/repo/issues/77#issuecomment-1", "team/repo", 77)]
     public void GitHub_shorthand_or_url(string reference, string? repo, int number) =>
         Assert.Equal((repo, number), GitHubService.ParseIssueReference(reference));
 
     [Fact]
     public void GitHub_reference_without_a_number_is_rejected() =>
-        Assert.Throws<ArgumentException>(() => GitHubService.ParseIssueReference("https://github.com/dapplo/SimpleMCP"));
+        Assert.Throws<ArgumentException>(() => GitHubService.ParseIssueReference("https://github.com/dapplo/SimpleArchitectureMCP"));
 
     [Fact]
     public async Task Confluence_download_is_the_markdown_named_after_the_title()
