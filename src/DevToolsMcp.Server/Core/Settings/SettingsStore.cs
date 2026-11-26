@@ -67,20 +67,31 @@ public sealed class SettingsStore(string filePath, IConfigurationRoot configurat
             }
 
             var temp = FilePath + ".tmp";
-            using (var stream = File.Create(temp))
+            File.Delete(temp); // a leftover from a crash may have other permissions; the mode below applies to new files only
+            using (var stream = new FileStream(temp, PrivateFile()))
             using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
             {
                 root.WriteTo(writer);
-            }
-
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite); // contains tokens
             }
 
             File.Move(temp, FilePath, overwrite: true);
         }
 
         configuration.Reload();
+    }
+
+    /// <summary>
+    /// The file holds tokens: on Linux and macOS it is created readable by the owner only (0600) from the start, so
+    /// there is no moment in which it carries the umask's group/other read bits.
+    /// </summary>
+    internal static FileStreamOptions PrivateFile()
+    {
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        return options;
     }
 }

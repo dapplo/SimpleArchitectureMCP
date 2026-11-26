@@ -37,10 +37,11 @@ public sealed class ArchiTools(ArchiService archi)
         [Description(".xml path; default the output folder")] string? path = null,
         [Description("Render the views to PNG")] bool render = true,
         [Description("Also return the images (costly)")] bool inline = false,
+        [Description("Replace an existing file that is not an exchange model")] bool overwrite = false,
         CancellationToken cancellationToken = default) =>
         Run("archi_create_model", async () =>
         {
-            var (file, summary) = await archi.CreateModelAsync(model, path, cancellationToken).ConfigureAwait(false);
+            var (file, summary) = await archi.CreateModelAsync(model, path, overwrite, cancellationToken).ConfigureAwait(false);
             var text = new StringBuilder().Append(file).Append(" (").Append(summary).Append(')').AppendLine();
             if (!render)
             {
@@ -57,10 +58,11 @@ public sealed class ArchiTools(ArchiService archi)
         [Description("Path to exchange .xml or .archimate")] string file,
         [Description("View names or ids; default all")] string[]? views = null,
         [Description(".drawio path; default the output folder")] string? path = null,
+        [Description("Replace an existing file that is not a draw.io file")] bool overwrite = false,
         CancellationToken cancellationToken = default) =>
         Run("archi_to_drawio", async () =>
         {
-            var (drawio, pages) = await archi.ToDrawioAsync(file, views, path, cancellationToken).ConfigureAwait(false);
+            var (drawio, pages) = await archi.ToDrawioAsync(file, views, path, overwrite, cancellationToken).ConfigureAwait(false);
             return new CallToolResult { Content = [new TextContentBlock { Text = $"{drawio} (pages: {string.Join(", ", pages)})" }] };
         });
 

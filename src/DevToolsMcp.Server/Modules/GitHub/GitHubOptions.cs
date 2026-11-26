@@ -72,6 +72,7 @@ public sealed partial class GitHubOptions
         return new Uri(url.EndsWith("/api/v3", StringComparison.OrdinalIgnoreCase) ? url + "/" : url + "/api/v3/");
     }
 
-    [GeneratedRegex(@"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$")]
+    // "." and ".." are not repository names: in an API path they would climb out of repos/owner/.
+    [GeneratedRegex(@"^[A-Za-z0-9-]{1,39}/(?!\.\.?$)[A-Za-z0-9._-]{1,100}$")]
     internal static partial Regex RepoName();
 }

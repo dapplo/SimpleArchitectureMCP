@@ -24,6 +24,7 @@ public sealed partial class MigrationService
     private readonly Func<MigrationOptions> _options;
     private readonly string _defaultMapFile;
     private DateTimeOffset _lastGitHubWrite = DateTimeOffset.MinValue;
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     public MigrationService(Func<IJiraApiAdapter> jira, JiraService jiraService, Func<GitHubApi> github, Func<MigrationOptions> options, string defaultMapFile)
     {
@@ -36,6 +37,9 @@ public sealed partial class MigrationService
 
     /// <summary>GitHub asks for at least a second between content-creating requests; tests set it to zero.</summary>
     internal TimeSpan GitHubWritePause { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>The clock for <see cref="MigrationRecord.Creating"/>; tests fix it.</summary>
+    internal Func<DateTimeOffset> Now { get; set; } = () => DateTimeOffset.UtcNow;
 
     public async Task<string> MigrateAsync(string target, string[]? issues, string? query, string? cursor, int limit, bool dryRun, CancellationToken ct)
     {
@@ -57,13 +61,43 @@ public sealed partial class MigrationService
         }
 
         var options = _options();
-        var run = new Run(options, MigrationMap.Load(string.IsNullOrWhiteSpace(options.MapFile) ? _defaultMapFile : Path.GetFullPath(options.MapFile.Trim())),
-            options.Users(), dryRun);
         var take = Math.Clamp(limit, 1, MaxBatch);
 
-        return t.Contains('/', StringComparison.Ordinal)
-            ? await ToGitHubAsync(run, GitHubService.ValidateRepo(t), list, query, cursor, take, ct).ConfigureAwait(false)
-            : await ToJiraAsync(run, JiraService.ValidateProjectKey(t), list, query, cursor, take, ct).ConfigureAwait(false);
+        // One migration at a time, and the map is read once the previous one is done: two calls copying the same
+        // issue would otherwise both create it before either records it.
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var run = new Run(options, MigrationMap.Load(MapPath(options.MapFile, _defaultMapFile)), options.Users(), dryRun);
+            return t.Contains('/', StringComparison.Ordinal)
+                ? await ToGitHubAsync(run, GitHubService.ValidateRepo(t), list, query, cursor, take, ct).ConfigureAwait(false)
+                : await ToJiraAsync(run, JiraService.ValidateProjectKey(t), list, query, cursor, take, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The map file: the default next to settings.json, or the configured one. A relative path is taken relative to
+    /// the settings folder, not the working directory, which differs between a stdio start by the MCP client and a
+    /// double-click; otherwise a resumed run would not find the record and would create every issue again.
+    /// </summary>
+    internal static string MapPath(string? configured, string defaultMapFile)
+    {
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return defaultMapFile;
+        }
+
+        var p = configured.Trim().Trim('"');
+        if (p.StartsWith('~'))
+        {
+            p = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + p[1..];
+        }
+
+        return Path.GetFullPath(p, Path.GetDirectoryName(Path.GetFullPath(defaultMapFile))!);
     }
 
     private sealed class Run(MigrationOptions options, MigrationMap map, UserMap users, bool dryRun)
@@ -182,19 +216,28 @@ public sealed partial class MigrationService
         foreach (var a in attachments.Where(a => a.Filename is not null && a.Content is not null))
         {
             urls.TryAdd(a.Filename!, run.Options.CommitAttachments
-                ? await CommitAttachmentAsync(run, jira, github, repo, key, a, upload: record is null, ct).ConfigureAwait(false)
+                ? await CommitAttachmentAsync(run, jira, github, repo, key, a, upload: record?.Target is null, ct).ConfigureAwait(false)
                 : a.Content!);
         }
 
         string? Login(string jiraName) => run.Users.ToGitHub(jiraName);
 
-        if (record is null)
+        if (record?.Target is null)
         {
-            var body = GitHubBody(run, issue, key, browse, targetId, urls, Login);
-            int? milestone = f.FixVersions is [{ Name: { Length: > 0 } version }, ..]
-                ? await MilestoneAsync(run, github, repo, version, ct).ConfigureAwait(false)
+            // An earlier run that stopped between creating the issue and recording it: adopt that issue.
+            var created = record?.Creating is { } started
+                ? await FindGitHubCopyAsync(github, repo, key, browse, started, ct).ConfigureAwait(false)
                 : null;
-            var created = await CreateGitHubIssueAsync(github, repo, f.Summary ?? key, body, labels, assignee, milestone, ct).ConfigureAwait(false);
+            if (created is null)
+            {
+                var body = GitHubBody(run, issue, key, browse, targetId, urls, Login);
+                int? milestone = f.FixVersions is [{ Name: { Length: > 0 } version }, ..]
+                    ? await MilestoneAsync(run, github, repo, version, ct).ConfigureAwait(false)
+                    : null;
+                run.Map.Set(mapKey, new MigrationRecord { Creating = Now() });
+                created = await CreateGitHubIssueAsync(github, repo, f.Summary ?? key, body, labels, assignee, milestone, ct).ConfigureAwait(false);
+            }
+
             record = new MigrationRecord { Target = $"{repo}#{created.Number}", Url = created.HtmlUrl, TargetId = created.Id, Attachments = true };
             run.Map.Set(mapKey, record);
         }
@@ -561,7 +604,17 @@ public sealed partial class MigrationService
 
         var names = files.ToDictionary(f => f.Url, f => f.Name, StringComparer.Ordinal);
 
-        if (record is null)
+        var resumed = record?.Target is not null;
+        var adopted = record?.Creating is { } began ? await FindJiraCopyAsync(jira, project, source, began, Now(), ct).ConfigureAwait(false) : null;
+        if (adopted is not null)
+        {
+            // An earlier run stopped between creating the issue and recording it: continue with that issue.
+            record = new MigrationRecord { Target = adopted, Url = _jiraService.BrowseUrl(adopted) };
+            run.Map.Set(mapKey, record);
+            resumed = true; // it may already have some attachments
+        }
+
+        if (record?.Target is null)
         {
             var fields = new JiraCreateFields
             {
@@ -596,6 +649,7 @@ public sealed partial class MigrationService
                 }
             }
 
+            run.Map.Set(mapKey, new MigrationRecord { Creating = Now() });
             var created = await CreateJiraIssueAsync(jira, fields, ct).ConfigureAwait(false);
             record = new MigrationRecord { Target = created.Key, Url = _jiraService.BrowseUrl(created.Key ?? string.Empty) };
             run.Map.Set(mapKey, record);
@@ -604,7 +658,12 @@ public sealed partial class MigrationService
         var key = record.Target!;
         if (!record.Attachments)
         {
-            foreach (var file in files)
+            // A resumed issue may already have some of the files (the earlier run stopped part way): skip those.
+            var existing = resumed
+                ? ((await jira.GetIssueAsync(key, ct).ConfigureAwait(false)).Fields?.Attachment ?? [])
+                    .Select(a => a.Filename).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : [];
+            foreach (var file in files.Where(f => !existing.Contains(f.Name)))
             {
                 await jira.AttachAsync(key, file.Name, new MemoryStream(file.Data, writable: false), ct).ConfigureAwait(false);
             }
@@ -733,6 +792,34 @@ public sealed partial class MigrationService
         }
 
         return "not closed: " + last?.Message;
+    }
+
+    // ---- Recovering an issue created by an interrupted run -------------------------------------------------------
+
+    /// <summary>
+    /// The issue an interrupted run created for <paramref name="key"/> after <paramref name="started"/>: the user's own
+    /// issues in the repository (REST listing, which unlike search has no index delay) whose body names the source.
+    /// </summary>
+    private static async Task<GhIssue?> FindGitHubCopyAsync(GitHubApi github, string repo, string key, string browse, DateTimeOffset started, CancellationToken ct)
+    {
+        var me = (await github.GetViewerAsync(ct).ConfigureAwait(false)).Login ?? throw new GitHubApiException(HttpStatusCode.Unauthorized, "unknown GitHub user");
+        var marker = $"Migrated from Jira [{key}]({browse})";
+        return (await github.ListIssuesByCreatorAsync(repo, me, started - TimeSpan.FromMinutes(1), ct).ConfigureAwait(false))
+            .Where(i => i.PullRequest is null && i.Body?.Contains(marker, StringComparison.Ordinal) == true)
+            .OrderBy(i => i.Number)
+            .FirstOrDefault();
+    }
+
+    /// <summary>The key of the issue an interrupted run created in <paramref name="project"/> for <paramref name="source"/>.</summary>
+    private static async Task<string?> FindJiraCopyAsync(IJiraApiAdapter jira, string project, string source, DateTimeOffset started, DateTimeOffset now,
+        CancellationToken ct)
+    {
+        // A relative date: absolute ones are read in the Jira user's time zone.
+        var minutes = (int)Math.Ceiling((now - started).TotalMinutes) + 2;
+        var jql = $"project = {project} AND creator = currentUser() AND created >= -{minutes}m ORDER BY created ASC";
+        var marker = $"Migrated from GitHub [{source}|";
+        var page = await jira.SearchAsync(jql, 50, null, ct, "description").ConfigureAwait(false);
+        return page.Issues.FirstOrDefault(i => i.Fields?.Description?.Contains(marker, StringComparison.Ordinal) == true)?.Key;
     }
 
     // ---- Helpers -----------------------------------------------------------------------------------------------

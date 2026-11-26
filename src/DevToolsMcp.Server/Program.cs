@@ -23,6 +23,12 @@ if (stdio)
 // Per-user settings written by the settings page. A stdio instance watches the file, because the page it is edited
 // on may belong to another devtools-mcp instance.
 var settingsFile = SettingsStore.AddTo(builder.Configuration, watch: stdio);
+if (LocalHosting.StartupProblem(builder.Configuration) is { } problem)
+{
+    Console.Error.WriteLine(problem);
+    return 1;
+}
+
 var port = LocalHosting.ResolvePort(builder.Configuration);   // 127.0.0.1 / ::1 only, port 5180 by default
 var ownsPort = PortGuard.IsFree(port, LocalHosting.AllowRemote(builder.Configuration));
 

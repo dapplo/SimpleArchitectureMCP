@@ -150,6 +150,26 @@ public class ConfluenceServiceTests
     }
 
     [Fact]
+    public async Task Export_page_replaces_earlier_exports_but_other_files_only_when_asked()
+    {
+        var dir = Directory.CreateDirectory(NewSaveDir()).FullName;
+        var svc = new ConfluenceService(new FakeAdapter());
+        var notes = Path.Combine(dir, "notes.md");
+        File.WriteAllText(notes, "# my notes");
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => svc.ExportPageAsync("7", notes, null, Ct));
+        Assert.Contains("overwrite=true", ex.Message);
+        Assert.Equal("# my notes", File.ReadAllText(notes));
+
+        var export = Path.Combine(dir, "page.md");
+        await svc.ExportPageAsync("7", export, null, Ct);
+        await svc.ExportPageAsync("7", export, null, Ct); // refreshing an export is fine
+        await svc.ExportPageAsync("7", notes, null, overwrite: true, Ct);
+        Assert.StartsWith("---\nid: 7", File.ReadAllText(notes));
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
     public async Task Search_and_children_are_compact()
     {
         var svc = new ConfluenceService(new FakeAdapter());

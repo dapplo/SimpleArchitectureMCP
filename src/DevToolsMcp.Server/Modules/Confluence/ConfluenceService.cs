@@ -63,7 +63,11 @@ public sealed partial class ConfluenceService
     /// Writes the page (same content as <see cref="GetPageAsync"/>) to a local file and returns only a one-line
     /// confirmation, so the body never enters the conversation.
     /// </summary>
-    public async Task<string> ExportPageAsync(string pageId, string? saveTo, string? format, CancellationToken ct)
+    public async Task<string> ExportPageAsync(string pageId, string? saveTo, string? format, CancellationToken ct) =>
+        await ExportPageAsync(pageId, saveTo, format, overwrite: false, ct).ConfigureAwait(false);
+
+    /// <param name="overwrite">Replace an existing file that is not an earlier export.</param>
+    public async Task<string> ExportPageAsync(string pageId, string? saveTo, string? format, bool overwrite, CancellationToken ct)
     {
         var storage = IsStorage(format);
         if (string.IsNullOrWhiteSpace(saveTo))
@@ -75,6 +79,8 @@ public sealed partial class ConfluenceService
         var extensions = storage ? StorageExtensions : MarkdownExtensions;
         // Validated after fetching: the default file name comes from the title.
         var file = LocalSavePath.Validate(saveTo, LocalSavePath.FileName(page.Title, extensions[0]), extensions);
+        // An earlier export (of any page) may be replaced; other files only when asked.
+        LocalSavePath.EnsureMayReplace(file.FullName, overwrite, head => head.StartsWith("---\nid: ", StringComparison.Ordinal));
         var content = RenderPage(page, storage);
         try
         {

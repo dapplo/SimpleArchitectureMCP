@@ -51,13 +51,18 @@ public sealed partial class ArchiService : IDisposable
     }
 
     /// <summary>Writes the exchange file for <paramref name="spec"/>; returns its path and a one-line summary.</summary>
-    public async Task<(string Path, string Summary)> CreateModelAsync(ArchiModelSpec spec, string? path, CancellationToken cancellationToken)
+    public Task<(string Path, string Summary)> CreateModelAsync(ArchiModelSpec spec, string? path, CancellationToken cancellationToken) =>
+        CreateModelAsync(spec, path, overwrite: false, cancellationToken);
+
+    /// <param name="overwrite">Replace an existing .xml outside the output folder that is not an exchange model.</param>
+    public async Task<(string Path, string Summary)> CreateModelAsync(ArchiModelSpec spec, string? path, bool overwrite, CancellationToken cancellationToken)
     {
         var (options, _) = Require();
         var result = ExchangeModelBuilder.Build(spec);
         var file = string.IsNullOrWhiteSpace(path)
             ? Path.Combine(options.OutputPath, ArchiPaths.FileName(string.IsNullOrWhiteSpace(spec.Name) ? "model" : spec.Name) + ".xml")
             : ArchiPaths.ValidateOutput(path, options.OutputPath, ".xml");
+        Core.Security.LocalSavePath.EnsureMayReplace(file, overwrite, IsExchangeModel, options.OutputPath);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         await File.WriteAllTextAsync(file, result.Xml, new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
         return (file, $"{result.Elements} elements, {result.Relationships} relationships, views: {string.Join(", ", result.Views)}");
@@ -78,8 +83,7 @@ public sealed partial class ArchiService : IDisposable
         var (options, executable) = Require();
         var wanted = (views ?? []).Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v.Trim()).ToArray();
 
-        var work = Path.Combine(Path.GetTempPath(), "devtools-mcp", "archi-run-" + Guid.NewGuid().ToString("N")[..12]);
-        Directory.CreateDirectory(work);
+        var work = Core.Security.OwnTempFolder.NewWorkFolder("archi-run-");
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -143,13 +147,19 @@ public sealed partial class ArchiService : IDisposable
     /// Writes a draw.io file with one page per selected view. Exchange .xml is converted directly; an .archimate
     /// model is first exported to exchange format by Archi.
     /// </summary>
-    public async Task<(string Path, IReadOnlyList<string> Pages)> ToDrawioAsync(string model, string[]? views, string? path, CancellationToken cancellationToken)
+    public Task<(string Path, IReadOnlyList<string> Pages)> ToDrawioAsync(string model, string[]? views, string? path, CancellationToken cancellationToken) =>
+        ToDrawioAsync(model, views, path, overwrite: false, cancellationToken);
+
+    /// <param name="overwrite">Replace an existing file outside the output folder that is not a draw.io file.</param>
+    public async Task<(string Path, IReadOnlyList<string> Pages)> ToDrawioAsync(string model, string[]? views, string? path, bool overwrite,
+        CancellationToken cancellationToken)
     {
         var options = Require().Options;
         var input = ValidateModelPath(model);
         var file = string.IsNullOrWhiteSpace(path)
             ? Path.Combine(options.OutputPath, Path.GetFileNameWithoutExtension(input) + ".drawio")
             : ArchiPaths.ValidateOutput(path, options.OutputPath, ".drawio");
+        Core.Security.LocalSavePath.EnsureMayReplace(file, overwrite, head => head.Contains("<mxfile", StringComparison.Ordinal), options.OutputPath);
 
         var result = DrawioConverter.Convert(await ReadExchangeXmlAsync(input, cancellationToken).ConfigureAwait(false), views);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
@@ -173,8 +183,7 @@ public sealed partial class ArchiService : IDisposable
     private async Task<byte[]> RunArchiForFileAsync(string[] args, string outputName, string input, CancellationToken cancellationToken)
     {
         var (options, executable) = Require();
-        var work = Path.Combine(Path.GetTempPath(), "devtools-mcp", "archi-run-" + Guid.NewGuid().ToString("N")[..12]);
-        Directory.CreateDirectory(work);
+        var work = Core.Security.OwnTempFolder.NewWorkFolder("archi-run-");
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -209,6 +218,9 @@ public sealed partial class ArchiService : IDisposable
 
         return $"Archi command line OK · jArchi plugin {(jArchi ? "installed" : "not installed")} · renderer {(options.UseJArchi ? "jArchi" : "HTML report")}.";
     }
+
+    /// <summary>An Open Exchange Format model (what archi_create_model writes), judged by its first 4 KB.</summary>
+    private static bool IsExchangeModel(string head) => head.Contains("http://www.opengroup.org/xsd/archimate", StringComparison.Ordinal);
 
     internal static string ValidateModelPath(string model)
     {

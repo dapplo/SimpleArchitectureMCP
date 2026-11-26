@@ -92,13 +92,23 @@ internal static partial class MigrationText
 
             var host = uri.Host;
             var isAsset = (string.Equals(host, webHost, StringComparison.OrdinalIgnoreCase)
-                           && (uri.AbsolutePath.StartsWith("/user-attachments/", StringComparison.Ordinal) || uri.AbsolutePath.Contains("/assets/", StringComparison.Ordinal)))
+                           && (uri.AbsolutePath.StartsWith("/user-attachments/", StringComparison.Ordinal) || IsRepositoryAsset(uri.AbsolutePath)))
                           || host.EndsWith("user-images.githubusercontent.com", StringComparison.OrdinalIgnoreCase);
             if (isAsset)
             {
                 yield return url;
             }
         }
+    }
+
+    /// <summary>
+    /// Legacy uploads live at <c>/owner/repo/assets/&lt;user id&gt;/&lt;uuid&gt;</c>. A file in the repository whose path
+    /// merely contains an assets folder (<c>/owner/repo/blob/main/assets/logo.png</c>) is a web page, not an attachment.
+    /// </summary>
+    private static bool IsRepositoryAsset(string path)
+    {
+        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 5 && parts[2] == "assets" && parts[3].All(char.IsAsciiDigit);
     }
 
     /// <summary>Points Markdown images at Jira attachments by file name (<c>![x](name)</c> becomes <c>!name!</c>).</summary>

@@ -307,6 +307,6 @@ or `codex mcp add devtools-mcp -- /path/to/devtools-mcp --stdio`. `/mcp` inside 
 | `401 Unauthorized` | `McpAuth:ApiKey` is set; add the header shown above. |
 | stdio server fails to start | Use the full path to the binary. If macOS blocks the downloaded binary, open it once with right-click → Open, or run `xattr -d com.apple.quarantine /path/to/devtools-mcp`. Check the client's MCP log for the stderr output. |
 | Connection refused | devtools-mcp isn't running, or runs on another port. A second start exits and leaves the first instance running. |
-| Works on the same machine, not from another one | By design: the server binds to loopback. `DevToolsMcp:AllowRemote=true` changes that; set an API key if you do. |
+| Works on the same machine, not from another one | By design: the server binds to loopback. `DevToolsMcp:AllowRemote=true` changes that and requires `McpAuth:ApiKey`; without a key the server refuses to start. |
 
 Next: [example prompts and workflows](examples.md).

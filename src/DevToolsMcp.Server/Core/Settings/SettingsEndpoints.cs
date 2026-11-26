@@ -154,8 +154,7 @@ public static class SettingsEndpoints
                 }
 
                 // Only the uploaded name's extension and a sanitized base name are kept; the folder is ours.
-                work = Path.Combine(Path.GetTempPath(), "devtools-mcp", "convert-" + Guid.NewGuid().ToString("N")[..12]);
-                Directory.CreateDirectory(work);
+                work = Security.OwnTempFolder.NewWorkFolder("convert-");
                 var fileName = Path.GetFileName(upload.FileName);
                 path = Path.Combine(work, Security.LocalSavePath.FileName(Path.GetFileNameWithoutExtension(fileName), Path.GetExtension(fileName).ToLowerInvariant()));
                 await using (var target = File.Create(path))
@@ -206,9 +205,19 @@ public static class SettingsEndpoints
         return new ModuleView(module.Name, module.Title, status.Active, status.Message, settings, conversions);
     }
 
-    /// <summary>Blocks DNS rebinding (Host must be loopback) and cross-site requests (Origin must match).</summary>
+    /// <summary>
+    /// Blocks DNS rebinding (Host must be loopback), cross-site requests (Origin must match) and, when
+    /// <c>DevToolsMcp:AllowRemote</c> binds all interfaces, other machines: they can send any Host header, so the
+    /// connection itself must come from this machine.
+    /// </summary>
     internal static bool IsSameOriginLoopback(HttpRequest request)
     {
+        if (request.HttpContext.Connection.RemoteIpAddress is { } remote
+            && !IPAddress.IsLoopback(remote.IsIPv4MappedToIPv6 ? remote.MapToIPv4() : remote))
+        {
+            return false;
+        }
+
         var host = request.Host.Host;
         var loopback = host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
             || (IPAddress.TryParse(host.Trim('[', ']'), out var ip) && IPAddress.IsLoopback(ip));

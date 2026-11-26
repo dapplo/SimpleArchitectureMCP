@@ -22,6 +22,16 @@ public static class LocalHosting
     public static bool AllowRemote(IConfiguration config) =>
         string.Equals(config["DevToolsMcp:AllowRemote"], "true", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Why the server must not start, or null. Binding all interfaces without <c>McpAuth:ApiKey</c> would let every
+    /// machine on the network call the tools with the user's Jira, GitHub and Confluence tokens.
+    /// </summary>
+    public static string? StartupProblem(IConfiguration config) =>
+        AllowRemote(config) && string.IsNullOrWhiteSpace(config["McpAuth:ApiKey"])
+            ? "DevToolsMcp:AllowRemote=true makes the tools reachable from other machines, so it needs an API key. " +
+              "Set McpAuth:ApiKey (e.g. env McpAuth__ApiKey) and give it to your MCP clients, or remove AllowRemote."
+            : null;
+
     /// <summary>Binds Kestrel to <paramref name="port"/>; 0 picks a free loopback port.</summary>
     public static int ConfigureLocalKestrel(this WebApplicationBuilder builder, int port)
     {

@@ -241,8 +241,8 @@ Renders ArchiMate views to PNG with your local [Archi](https://www.archimatetool
 | Tool | Inputs | Returns |
 | --- | --- | --- |
 | `archi_render` | `file` (`.archimate` or exchange `.xml`), `views?` (names or ids, default all), `out_dir?`, `inline` (false) | `view \| png path \| WxH` per view, plus the images when `inline` |
-| `archi_create_model` | `model` (JSON below), `path?` (`.xml`), `render` (true), `inline` (false) | `<xml path> (n elements, n relationships, views: …)` then the `archi_render` lines |
-| `archi_to_drawio` | `file` (exchange `.xml` or `.archimate`), `views?`, `path?` (`.drawio`) | `<drawio path> (pages: …)` |
+| `archi_create_model` | `model` (JSON below), `path?` (`.xml`), `render` (true), `inline` (false), `overwrite` (false: an existing file that is not an exchange model is kept) | `<xml path> (n elements, n relationships, views: …)` then the `archi_render` lines |
+| `archi_to_drawio` | `file` (exchange `.xml` or `.archimate`), `views?`, `path?` (`.drawio`), `overwrite` (false: an existing non-draw.io file is kept) | `<drawio path> (pages: …)` |
 
 ```json
 {
@@ -306,7 +306,7 @@ The settings page shows the first three; scale, margin and timeout are set in `a
 | `DevToolsMcp:Port`, else `PORT`, else 5180 | Listen port |
 | `DevToolsMcp:OpenBrowser` | `false` stops the settings page from opening on first start |
 | `DevToolsMcp:SettingsFile` | Override the per-user settings file path |
-| `DevToolsMcp:AllowRemote` | `true` binds all interfaces. Default: loopback only (`127.0.0.1` and `::1`) |
+| `DevToolsMcp:AllowRemote` | `true` binds all interfaces and requires `McpAuth:ApiKey` (the server refuses to start without one). Default: loopback only (`127.0.0.1` and `::1`) |
 | `McpAuth:ApiKey` (`McpAuth__ApiKey`) | If set, `/mcp` requires `Authorization: Bearer <key>` or `X-API-Key` (`/health` stays open) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Enables OTLP export (Aspire sets it automatically) |
 

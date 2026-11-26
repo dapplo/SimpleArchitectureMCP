@@ -17,6 +17,12 @@ public sealed class MigrationRecord
     /// <summary>How many source comments have been copied.</summary>
     public int Comments { get; set; }
 
+    /// <summary>
+    /// Set just before the target issue is created, cleared once it is recorded. Still set on a later run means the
+    /// earlier one stopped in between, so the target is searched for the issue before creating another.
+    /// </summary>
+    public DateTimeOffset? Creating { get; set; }
+
     public bool Attachments { get; set; }
     public bool Closed { get; set; }
     public bool Done { get; set; }
@@ -54,35 +60,55 @@ public sealed class MigrationMap
     {
         lock (Gate)
         {
-            if (!File.Exists(path))
-            {
-                return new MigrationMap(path, new MigrationMapFile());
-            }
+            return new MigrationMap(path, Read(path));
+        }
+    }
 
-            try
-            {
-                var data = JsonSerializer.Deserialize(File.ReadAllBytes(path), MigrationJsonContext.Default.MigrationMapFile) ?? new MigrationMapFile();
-                data.Issues = new Dictionary<string, MigrationRecord>(data.Issues, StringComparer.OrdinalIgnoreCase);
-                return new MigrationMap(path, data);
-            }
-            catch (JsonException ex)
-            {
-                throw new IOException($"Migration map {path} is not valid JSON ({ex.Message}). Fix or move it; nothing was migrated.", ex);
-            }
+    private static MigrationMapFile Read(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return new MigrationMapFile();
+        }
+
+        try
+        {
+            var data = JsonSerializer.Deserialize(File.ReadAllBytes(path), MigrationJsonContext.Default.MigrationMapFile) ?? new MigrationMapFile();
+            data.Issues = new Dictionary<string, MigrationRecord>(data.Issues, StringComparer.OrdinalIgnoreCase);
+            return data;
+        }
+        catch (JsonException ex)
+        {
+            throw new IOException($"Migration map {path} is not valid JSON ({ex.Message}). Fix or move it; nothing was migrated.", ex);
         }
     }
 
     public static string Key(string source, string target) => $"{source} -> {target}";
 
-    public MigrationRecord? Get(string key) => _data.Issues.GetValueOrDefault(key);
+    public MigrationRecord? Get(string key)
+    {
+        lock (Gate)
+        {
+            return _data.Issues.GetValueOrDefault(key);
+        }
+    }
 
+    /// <summary>
+    /// Records one issue. The file is re-read first and only this key is replaced, so runs that share the file (two
+    /// calls at once, or the stdio and the HTTP instance) don't overwrite each other's records.
+    /// </summary>
     public void Set(string key, MigrationRecord record)
     {
         lock (Gate)
         {
+            foreach (var (k, r) in Read(Path).Issues)
+            {
+                _data.Issues[k] = r;
+            }
+
             _data.Issues[key] = record;
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path)!);
-            var temp = Path + ".tmp";
+            var temp = $"{Path}.{Guid.NewGuid():N}.tmp"; // unique: another process may be saving the same map
             File.WriteAllBytes(temp, JsonSerializer.SerializeToUtf8Bytes(_data, MigrationJsonContext.Default.MigrationMapFile));
             File.Move(temp, Path, overwrite: true);
         }
