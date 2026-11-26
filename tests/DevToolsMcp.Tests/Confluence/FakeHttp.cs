@@ -7,15 +7,15 @@ namespace DevToolsMcp.Tests.Confluence;
 internal sealed class FakeHttp : HttpMessageHandler, IHttpClientFactory
 {
     private readonly Uri _baseAddress;
-    private readonly Dictionary<string, (HttpStatusCode Status, string Body)> _routes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (HttpStatusCode Status, string Body, string MediaType)> _routes = new(StringComparer.Ordinal);
 
     public FakeHttp(Uri baseAddress) => _baseAddress = baseAddress;
 
     public List<(HttpMethod Method, string PathAndQuery, string? Body)> Requests { get; } = [];
 
-    public FakeHttp On(string method, string pathAndQuery, string json, HttpStatusCode status = HttpStatusCode.OK)
+    public FakeHttp On(string method, string pathAndQuery, string json, HttpStatusCode status = HttpStatusCode.OK, string mediaType = "application/json")
     {
-        _routes[$"{method} {pathAndQuery}"] = (status, json);
+        _routes[$"{method} {pathAndQuery}"] = (status, json, mediaType);
         return this;
     }
 
@@ -32,9 +32,9 @@ internal sealed class FakeHttp : HttpMessageHandler, IHttpClientFactory
 
         if (!_routes.TryGetValue($"{request.Method.Method} {path}", out var route))
         {
-            route = (HttpStatusCode.NotFound, "{\"message\":\"no route " + path + "\"}");
+            route = (HttpStatusCode.NotFound, "{\"message\":\"no route " + path + "\"}", "application/json");
         }
 
-        return new HttpResponseMessage(route.Status) { Content = new StringContent(route.Body, Encoding.UTF8, "application/json") };
+        return new HttpResponseMessage(route.Status) { Content = new StringContent(route.Body, Encoding.UTF8, route.MediaType) };
     }
 }

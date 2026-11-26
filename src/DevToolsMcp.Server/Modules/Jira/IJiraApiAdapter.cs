@@ -14,12 +14,20 @@ public interface IJiraApiAdapter
     /// <summary>Site root used for <c>browse/KEY</c> links (always ends with '/').</summary>
     Uri SiteBase { get; }
 
-    Task<JiraSearchResponse> SearchAsync(string jql, int limit, CancellationToken ct);
+    /// <param name="cursor">null for the first page; then the value from <see cref="JiraService.NextCursor"/>.</param>
+    /// <param name="fields">Comma-separated fields per hit.</param>
+    Task<JiraSearchResponse> SearchAsync(string jql, int limit, string? cursor, CancellationToken ct, string fields = JiraAdapterBase.SearchFields);
 
     Task<JiraIssue> GetIssueAsync(string key, CancellationToken ct);
 
     /// <summary>The newest <paramref name="limit"/> comments, newest first.</summary>
     Task<JiraCommentPage> GetCommentsAsync(string key, int limit, CancellationToken ct);
+
+    /// <summary>Comments oldest first, from <paramref name="startAt"/>.</summary>
+    Task<JiraCommentPage> GetCommentsPageAsync(string key, int startAt, int limit, CancellationToken ct);
+
+    /// <summary>Downloads an attachment's <c>content</c> URL (same host only, so credentials never leave the site).</summary>
+    Task<byte[]> DownloadAsync(string url, long maxBytes, CancellationToken ct);
 
     Task<JiraCreated> CreateIssueAsync(JiraCreateFields fields, CancellationToken ct);
 

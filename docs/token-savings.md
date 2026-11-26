@@ -132,6 +132,10 @@ Where the savings come from:
 
 Basic issue work only: search, read, create, edit, close/reopen, comment, labels, assignees and milestones, all with your token's own permissions. There are no repository, organization, team, webhook or admin tools, so none of their schemas are paid for. Attachments are not supported, because GitHub has no public API for uploading issue attachments.
 
+## Migration
+
+`migrate_issues` (about 1 KB, ~250 tokens of schema, listed only when Jira and GitHub are both configured) moves issues between the two without the text passing through the model. Doing the same with the per-item tools means reading each issue with all its comments and then writing every description and comment again as model output: roughly the issue's size in input tokens plus the same again in (slower, pricier) output tokens, plus one call per comment. For a typical 6 KB issue with comments that is ~3,000 tokens and several calls; with `migrate_issues` it is one ~25-token line in a batch of up to 25 issues per call. The model cannot reword the text along the way either.
+
 ## Compared with no tool at all
 
 > **Not measured.** This is a reasoned estimate. The cost depends on how much the agent has to experiment, so real numbers would need agent sessions run both ways.

@@ -38,7 +38,7 @@ public class JiraServiceTests
 
         var text = await jira.SearchAsync("project = OPS", 2, Ct);
 
-        Assert.Equal("OPS-7 | Bug | Open | Unassigned | 2026-11-25 | Broken build\nOPS-8 | Task | Done | Jane | - | Docs\n(more results; refine the JQL)", text);
+        Assert.Equal("OPS-7 | Bug | Open | Unassigned | 2026-11-25 | Broken build\nOPS-8 | Task | Done | Jane | - | Docs\n(more; next cursor: abc)", text);
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class JiraServiceTests
     public async Task Get_issue_returns_front_matter_markdown_and_latest_comments_oldest_first()
     {
         var (jira, http) = Create();
-        http.On("GET", "/rest/api/2/issue/OPS-7?fields=summary,description,status,issuetype,priority,resolution,assignee,reporter,labels,parent,attachment,created,updated", IssueJson)
+        http.On("GET", "/rest/api/2/issue/OPS-7?fields=summary,description,status,issuetype,priority,resolution,assignee,reporter,labels,parent,attachment,subtasks,issuelinks,fixVersions,components,created,updated", IssueJson)
             .On("GET", "/rest/api/2/issue/OPS-7/comment?orderBy=-created&maxResults=2", """
                 {"startAt":0,"maxResults":2,"total":3,"comments":[
                   {"id":"3","author":{"displayName":"Jane Doe"},"body":"Fixed in _main_","created":"2026-11-24T09:00:00.000+0000"},
@@ -109,7 +109,7 @@ public class JiraServiceTests
     public async Task Get_issue_without_comments_skips_the_comment_call()
     {
         var (jira, http) = Create();
-        http.On("GET", "/rest/api/2/issue/OPS-7?fields=summary,description,status,issuetype,priority,resolution,assignee,reporter,labels,parent,attachment,created,updated", IssueJson);
+        http.On("GET", "/rest/api/2/issue/OPS-7?fields=summary,description,status,issuetype,priority,resolution,assignee,reporter,labels,parent,attachment,subtasks,issuelinks,fixVersions,components,created,updated", IssueJson);
         await jira.GetIssueAsync("OPS-7", 0, Ct);
         Assert.Single(http.Requests);
     }
@@ -289,5 +289,15 @@ public class JiraServiceTests
         var (jira, http) = Create();
         await Assert.ThrowsAsync<ArgumentException>(() => jira.GetIssueAsync(key, 0, Ct));
         Assert.Empty(http.Requests);
+    }
+
+    [Fact]
+    public async Task Data_center_search_pages_with_startAt_cursor()
+    {
+        var (jira, http) = Create("https://jira.corp", null);
+        http.On("GET", $"/rest/api/2/search?jql=project%20%3D%20OPS&maxResults=1&fields={SearchFields}&startAt=1",
+            """{"issues":[{"key":"OPS-8","fields":{"summary":"S","status":{"name":"Open"},"issuetype":{"name":"Bug"}}}],"total":3,"startAt":1}""");
+
+        Assert.Equal("OPS-8 | Bug | Open | Unassigned | - | S\n(2 of 3; next cursor: 2)", await jira.SearchAsync("project = OPS", 1, "1", Ct));
     }
 }

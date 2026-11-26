@@ -27,14 +27,16 @@ public sealed partial class JiraService
     public const int MaxComments = 50;
     public const long MaxAttachmentBytes = 100L * 1024 * 1024;
 
-    public async Task<string> SearchAsync(string query, int limit, CancellationToken ct)
+    public async Task<string> SearchAsync(string query, int limit, CancellationToken ct) => await SearchAsync(query, limit, null, ct).ConfigureAwait(false);
+
+    public async Task<string> SearchAsync(string query, int limit, string? cursor, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
             throw new ArgumentException("jql is required.");
         }
 
-        var result = await Api.SearchAsync(JiraJql.Build(query), Math.Clamp(limit, 1, MaxSearchLimit), ct).ConfigureAwait(false);
+        var result = await Api.SearchAsync(JiraJql.Build(query), Math.Clamp(limit, 1, MaxSearchLimit), Blank(cursor), ct).ConfigureAwait(false);
         if (result.Issues.Count == 0)
         {
             return "No issues.";
@@ -50,14 +52,27 @@ public sealed partial class JiraService
                 .Append(" | ").Append(f?.Summary).Append('\n');
         }
 
-        var more = result.Total is { } total ? total > result.Issues.Count : result.IsLast == false || result.NextPageToken is not null;
-        if (more)
+        if (NextCursor(result) is { } next)
         {
-            sb.Append(result.Total is { } t ? $"({result.Issues.Count} of {t}; refine the JQL for the rest)" : "(more results; refine the JQL)");
+            sb.Append(result.Total is { } t ? $"({(result.StartAt ?? 0) + result.Issues.Count} of {t}; next cursor: {next})" : $"(more; next cursor: {next})");
         }
 
         return sb.ToString().TrimEnd();
     }
+
+    /// <summary>The cursor for the next page (Cloud nextPageToken, Data Center startAt), or null on the last page.</summary>
+    public static string? NextCursor(JiraSearchResponse page)
+    {
+        if (!string.IsNullOrEmpty(page.NextPageToken) && page.IsLast != true)
+        {
+            return page.NextPageToken;
+        }
+
+        var end = (page.StartAt ?? 0) + page.Issues.Count;
+        return page.Total is { } total && end < total && page.Issues.Count > 0 ? end.ToString(CultureInfo.InvariantCulture) : null;
+    }
+
+    private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     public async Task<string> GetIssueAsync(string issueKey, int comments, CancellationToken ct)
     {
@@ -79,6 +94,10 @@ public sealed partial class JiraService
         Line(sb, "reporter", UserName(f.Reporter));
         Line(sb, "labels", f.Labels is { Count: > 0 } labels ? string.Join(", ", labels) : null);
         Line(sb, "parent", f.Parent?.Key is { } parent ? $"{parent} {f.Parent.Fields?.Summary}".TrimEnd() : null);
+        Line(sb, "subtasks", f.Subtasks is { Count: > 0 } subs ? string.Join(", ", subs.Select(t => t.Key)) : null);
+        Line(sb, "links", f.Issuelinks is { Count: > 0 } links ? string.Join(", ", links.Select(LinkText)) : null);
+        Line(sb, "fix versions", f.FixVersions is { Count: > 0 } versions ? string.Join(", ", versions.Select(v => v.Name)) : null);
+        Line(sb, "components", f.Components is { Count: > 0 } components ? string.Join(", ", components.Select(c => c.Name)) : null);
         Line(sb, "created", Date(f.Created));
         Line(sb, "updated", Date(f.Updated));
         Line(sb, "url", BrowseUrl(issue.Key ?? key));
@@ -306,7 +325,12 @@ public sealed partial class JiraService
         }
     }
 
-    private string BrowseUrl(string key) => new Uri(Api.SiteBase, "browse/" + key).ToString();
+    /// <summary>"blocks OPS-9" / "is blocked by OPS-3".</summary>
+    internal static string LinkText(JiraIssueLink link) => link.OutwardIssue is { } outward
+        ? $"{link.Type?.Outward ?? link.Type?.Name ?? "relates to"} {outward.Key}"
+        : $"{link.Type?.Inward ?? link.Type?.Name ?? "relates to"} {link.InwardIssue?.Key}";
+
+    internal string BrowseUrl(string key) => new Uri(Api.SiteBase, "browse/" + key).ToString();
 
     private static string ListTransitions(IEnumerable<JiraTransition> transitions) =>
         string.Join('\n', transitions.Select(t => $"{t.Id} | {t.Name} → {t.To?.Name ?? "?"}"));
@@ -319,7 +343,7 @@ public sealed partial class JiraService
         }
     }
 
-    private static string? UserName(JiraUser? u) => u is null ? null : u.DisplayName ?? u.Name ?? u.AccountId;
+    internal static string? UserName(JiraUser? u) => u is null ? null : u.DisplayName ?? u.Name ?? u.AccountId;
 
     private static string? Date(string? iso) => iso is { Length: >= 10 } ? iso[..10] : iso;
 

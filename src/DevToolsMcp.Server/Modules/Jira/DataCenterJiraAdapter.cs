@@ -7,8 +7,10 @@ public sealed class DataCenterJiraAdapter(IHttpClientFactory httpClientFactory, 
 {
     public override JiraDeploymentType DeploymentType => JiraDeploymentType.DataCenter;
 
-    public override Task<JiraSearchResponse> SearchAsync(string jql, int limit, CancellationToken ct) =>
-        GetAsync($"{Api}search?jql={Uri.EscapeDataString(jql)}&maxResults={limit}&fields={SearchFields}",
+    /// <param name="cursor">startAt offset.</param>
+    public override Task<JiraSearchResponse> SearchAsync(string jql, int limit, string? cursor, CancellationToken ct, string fields = SearchFields) =>
+        GetAsync($"{Api}search?jql={Uri.EscapeDataString(jql)}&maxResults={limit}&fields={fields}"
+            + (int.TryParse(cursor, out var startAt) && startAt > 0 ? $"&startAt={startAt}" : string.Empty),
             JiraJsonContext.Default.JiraSearchResponse, ct);
 
     /// <summary>Matches username, display name and email.</summary>

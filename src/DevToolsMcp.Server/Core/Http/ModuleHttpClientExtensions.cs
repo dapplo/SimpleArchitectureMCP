@@ -47,14 +47,23 @@ public static class ModuleHttpClientExtensions
             builder.AddHttpMessageHandler(() => new StaticAuthHandler(authorization));
         }
 
+        // Outside the resilience pipeline: a Retry-After wait must not count against the request timeout.
+        builder.AddHttpMessageHandler(() => new RateLimitHandler());
+
         builder.AddStandardResilienceHandler(o =>
         {
             o.TotalRequestTimeout.Timeout = timeout;
             o.AttemptTimeout.Timeout = timeout / 2;
             o.CircuitBreaker.SamplingDuration = timeout; // must be >= 2x attempt timeout
+            // 429s are left to RateLimitHandler (it honours Retry-After for every method) and don't trip the breaker.
+            o.Retry.ShouldHandle = args => ValueTask.FromResult(IsTransientNotRateLimited(args.Outcome));
+            o.CircuitBreaker.ShouldHandle = args => ValueTask.FromResult(IsTransientNotRateLimited(args.Outcome));
             o.Retry.DisableForUnsafeHttpMethods();
         });
 
         return builder;
     }
+
+    private static bool IsTransientNotRateLimited(Polly.Outcome<HttpResponseMessage> outcome) =>
+        outcome.Result?.StatusCode != HttpStatusCode.TooManyRequests && HttpClientResiliencePredicates.IsTransient(outcome);
 }

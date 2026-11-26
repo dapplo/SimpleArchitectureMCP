@@ -7,6 +7,7 @@ using DevToolsMcp.Server.Modules.Archi;
 using DevToolsMcp.Server.Modules.Confluence;
 using DevToolsMcp.Server.Modules.Jira;
 using DevToolsMcp.Server.Modules.GitHub;
+using DevToolsMcp.Server.Modules.Migration;
 
 // --stdio: the MCP client starts this process and talks MCP over stdin/stdout (no Node.js bridge needed).
 // The settings page and /health stay on HTTP; stdout carries only protocol messages, logs go to stderr.
@@ -61,6 +62,7 @@ mcp.AddConfluenceModule(builder.Configuration, json.McpOptions);
 mcp.AddJiraModule(builder.Configuration, json.McpOptions);
 mcp.AddGitHubModule(builder.Configuration, json.McpOptions);
 mcp.AddArchiModule(builder.Configuration, json.McpOptions);
+mcp.AddMigrationModule(builder.Configuration, json.McpOptions); // after Jira and GitHub: uses both
 
 var app = builder.Build();
 

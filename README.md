@@ -65,7 +65,7 @@ src/
   DevToolsMcp.Server/            Native AOT MCP server (assembly: devtools-mcp)
     Program.cs                   Composition root: JSON contexts, MCP server, modules
     Core/
-      Http/                      Named HttpClient per module: auth handler, payload metrics, resilience
+      Http/                      Named HttpClient per module: auth handler, payload metrics, rate-limit waits, resilience
       Json/                      DevToolsJson: combines module JsonSerializerContexts (TypeInfoResolverChain)
       Markdown/                  Shared Markdown parser (AST) used by provider emitters
       Modules/                   ModuleRegistry (enabled/disabled modules, /health)
@@ -96,6 +96,7 @@ src/
       GitHubJsonContext.cs       Source-generated DTOs
       GitHubService.cs           Validation, repo resolution, compact output
       GitHubTools.cs             The 6 MCP tools
+    Modules/Migration/           migrate_issues: Jira <-> GitHub copy on the server, user map, local migration record
     Modules/Archi/               ArchiMate diagrams through a local Archi install
       ArchiModule.cs             AddArchiModule(): conditional registration, settings form
       ArchiOptions.cs            Executable, renderer, output folder, scale, timeout
@@ -156,8 +157,8 @@ Basic issue work with your own Jira permissions. There are no admin tools (no pr
 
 | Tool | Inputs | Returns |
 | --- | --- | --- |
-| `jira_search` | `jql` (JQL, an issue key, or plain text), `limit` (20, max 50) | `key \| type \| status \| assignee \| yyyy-MM-dd \| summary` per issue |
-| `jira_get_issue` | `issue_key`, `comments` (5, max 50) | Front matter (key, summary, type, status, priority, assignee, labels, parent, url, attachments, …) + Markdown description + latest comments |
+| `jira_search` | `jql` (JQL, an issue key, or plain text), `limit` (20, max 50), `cursor?` | `key \| type \| status \| assignee \| yyyy-MM-dd \| summary` per issue, then `next cursor: …` when there are more |
+| `jira_get_issue` | `issue_key`, `comments` (5, max 50) | Front matter (key, summary, type, status, priority, assignee, labels, parent, subtasks, links, fix versions, components, url, attachments, …) + Markdown description + latest comments |
 | `jira_create_issue` | `project_key`, `summary`, `issue_type` (`Task`), `description?`, `assignee?`, `labels?`, `priority?`, `parent_key?` | `Created <key> \| <url>` |
 | `jira_update_issue` | `issue_key`, `summary?`, `description?`, `priority?`, `add_labels?`, `remove_labels?`, `assignee?` | `Updated <key>: <changed fields>.` |
 | `jira_transition_issue` | `issue_key`, `transition?`, `comment?`, `resolution?` | Without `transition`: `id \| name → status` per available transition. With it: `<key> → <status>.` |
@@ -178,7 +179,7 @@ Jira configuration mirrors Confluence: `Jira:BaseUrl`, `Jira:Email` (Cloud only)
 
 | Tool | Inputs | Returns |
 | --- | --- | --- |
-| `github_search_issues` | `query` (GitHub search syntax), `repo?`, `limit` (20, max 50) | `#n \| state \| title \| labels \| assignees \| yyyy-MM-dd` per hit |
+| `github_search_issues` | `query` (GitHub search syntax), `repo?`, `limit` (20, max 50), `page` (1) | `#n \| state \| title \| labels \| assignees \| yyyy-MM-dd` per hit, then `next page: n` when there are more (GitHub search stops at 1,000 results) |
 | `github_get_issue` | `number`, `repo?`, `comments` (latest 20, 0–100) | Front matter (state, author, labels, assignees, milestone, url) + body + `[comment_id] @author date` comments |
 | `github_create_issue` | `title`, `body?`, `repo?`, `labels?`, `assignees?`, `milestone?` | `Created owner/repo#n \| <url>` |
 | `github_update_issue` | `number`, `repo?`, `title?`, `body?`, `state?`, `state_reason?`, `milestone?` (0 clears), `add_labels?`, `remove_labels?`, `add_assignees?`, `remove_assignees?` | `Updated owner/repo#n: <what changed>.` |
@@ -198,6 +199,40 @@ Jira configuration mirrors Confluence: `Jira:BaseUrl`, `Jira:Email` (Cloud only)
 | `GitHub:BaseUrl` (`GitHub__BaseUrl`) | Empty for github.com. GitHub Enterprise Server: `https://github.example.com` (`/api/v3` is added). Enterprise Cloud with data residency: `https://SUBDOMAIN.ghe.com` |
 | `GitHub:DefaultRepo` (`GitHub__DefaultRepo`) | Optional `owner/repo` used when a call omits `repo` |
 | `GitHub:TimeoutSeconds` | Total request timeout (default 30) |
+
+## Migration tool
+
+Listed only while both Jira and GitHub are configured. `migrate_issues` copies issues **on the server**, so descriptions and comments never pass through the model: each issue costs one short result line instead of reading and re-typing its text.
+
+| Tool | Inputs | Returns |
+| --- | --- | --- |
+| `migrate_issues` | `target` (`owner/repo` to copy from Jira, a Jira project key to copy from GitHub), `issues?` (Jira keys, or `#12` / `owner/repo#12`) or `query?` (JQL, or a GitHub search), `cursor?`, `limit` (10, max 25), `dry_run` | `OPS-7 → o/r#45 \| 3 comments, 1 attachments \| <url>` per issue, `= … (already migrated)` for finished ones, `✗ <error>` for failures, then `next cursor: …` |
+
+What is copied:
+
+| | Jira → GitHub | GitHub → Jira |
+| --- | --- | --- |
+| Text | Description and all comments, wiki markup → Markdown | Body and all comments, Markdown → wiki markup |
+| Author and date | Header line on the issue and on every comment (posted as you; keeping the original author needs admin import tools) | Same |
+| Status | Done category → closed; resolution → `completed` / `not_planned` / `duplicate`; In-progress statuses → `status: <name>` label | Closed → a transition to a Done status, with a resolution when the screen asks for one |
+| Labels | Labels, issue type, components, `priority: <name>` | Labels (spaces become `-`); a `bug` label makes it a Bug |
+| Assignee | Mapped user (`Migration:UserMap`), if they can be assigned | Mapped user |
+| Milestone | First fix version → milestone (created when missing) | Milestone → fix version, if the project has one with that name |
+| Attachments | Links to the Jira file, or committed to a branch (`Migration:Attachments=Commit`) | Downloaded from GitHub and attached; images point at the attachment |
+| Hierarchy and links | Sub-tasks and parents become GitHub sub-issues once both sides are copied; links are listed with the new numbers | Sub-issues are listed with their Jira keys |
+
+* **Idempotent.** A local record (`migration-map.json` next to `settings.json`) stores what was copied where, and progress is saved after every comment, so re-running a call skips finished issues and resumes an interrupted one. Keep the file if you migrate in several sessions.
+* **Nobody gets pinged by accident.** A Jira mention becomes `@login` only for mapped users; others become inert `` `@name` `` text.
+* **Rate limits.** GitHub writes are spaced a second apart, as GitHub asks. Every module now waits for `Retry-After` / `X-RateLimit-Reset` (up to a minute) on HTTP 429 and GitHub's rate-limit 403s, also for POSTs. Longer waits stop the batch with a message; run the same call again later.
+* **Large projects.** Page through with `cursor`. Jira queries without `ORDER BY` are copied oldest first. GitHub search stops at 1,000 results, so slice larger repositories by date (`created:2024-01-01..2024-06-30`).
+* Try `dry_run=true` first: it shows title, labels, assignee, state and counts without writing anything.
+
+| Key (env var) | Meaning |
+| --- | --- |
+| `Migration:UserMap` | `jira-user=github-login` pairs, separated by commas. The Jira side may be a username, account id, email or display name |
+| `Migration:Attachments` | `Link` (default) or `Commit`: copy Jira attachments into the repository |
+| `Migration:AttachmentBranch` | Branch for `Commit` (default `migrated-attachments`, created from the default branch) |
+| `Migration:MapFile` | Where the migration record is kept |
 
 ## Archi tools
 

@@ -6,6 +6,9 @@ using System.Text.Json.Serialization.Metadata;
 
 namespace DevToolsMcp.Server.Modules.GitHub;
 
+/// <param name="FileName">From Content-Disposition, when the server sends one.</param>
+public sealed record GhDownload(byte[] Data, string? MediaType, string? FileName);
+
 public sealed class GitHubApiException(HttpStatusCode status, string message) : Exception(message)
 {
     public HttpStatusCode Status { get; } = status;
@@ -28,9 +31,81 @@ public sealed class GitHubApi(IHttpClientFactory httpClientFactory, GitHubOption
     public Task<GhUser> GetViewerAsync(CancellationToken ct) =>
         SendAsync(HttpMethod.Get, "user", null, GitHubJsonContext.Default.GhUser, ct)!;
 
-    public Task<GhSearchResult> SearchIssuesAsync(string q, int limit, CancellationToken ct) =>
-        SendAsync(HttpMethod.Get, $"search/issues?q={Uri.EscapeDataString(q)}&per_page={limit}&sort=updated&order=desc",
+    public Task<GhSearchResult> SearchIssuesAsync(string q, int limit, CancellationToken ct) => SearchIssuesAsync(q, limit, 1, "updated", "desc", ct);
+
+    public Task<GhSearchResult> SearchIssuesAsync(string q, int limit, int page, string sort, string order, CancellationToken ct) =>
+        SendAsync(HttpMethod.Get, $"search/issues?q={Uri.EscapeDataString(q)}&per_page={limit}&sort={sort}&order={order}"
+            + (page > 1 ? $"&page={page}" : string.Empty),
             null, GitHubJsonContext.Default.GhSearchResult, ct)!;
+
+    /// <summary>Host of the web UI (github.com for api.github.com): where issue attachments live.</summary>
+    public string WebHost => _baseAddress.Host.StartsWith("api.", StringComparison.OrdinalIgnoreCase) ? _baseAddress.Host[4..] : _baseAddress.Host;
+
+    public Task<List<GhMilestone>> GetMilestonesAsync(string repo, CancellationToken ct) =>
+        SendAsync(HttpMethod.Get, $"repos/{repo}/milestones?state=all&per_page=100", null, GitHubJsonContext.Default.ListGhMilestone, ct)!;
+
+    public Task<GhMilestone> CreateMilestoneAsync(string repo, string title, CancellationToken ct) =>
+        SendAsync(HttpMethod.Post, $"repos/{repo}/milestones", w => w.WriteString("title", title), GitHubJsonContext.Default.GhMilestone, ct)!;
+
+    public Task<List<GhIssue>> GetSubIssuesAsync(string repo, int number, CancellationToken ct) =>
+        SendAsync(HttpMethod.Get, $"repos/{repo}/issues/{number}/sub_issues?per_page=100", null, GitHubJsonContext.Default.ListGhIssue, ct)!;
+
+    /// <param name="childId">The sub-issue's database id (<see cref="GhIssue.Id"/>), not its number.</param>
+    public Task AddSubIssueAsync(string repo, int parentNumber, long childId, CancellationToken ct) =>
+        SendAsync<GhIssue>(HttpMethod.Post, $"repos/{repo}/issues/{parentNumber}/sub_issues", w => w.WriteNumber("sub_issue_id", childId), null, ct);
+
+    public Task<GhRepo> GetRepoAsync(string repo, CancellationToken ct) =>
+        SendAsync(HttpMethod.Get, $"repos/{repo}", null, GitHubJsonContext.Default.GhRepo, ct)!;
+
+    public Task<GhRef> GetBranchRefAsync(string repo, string branch, CancellationToken ct) =>
+        SendAsync(HttpMethod.Get, $"repos/{repo}/git/ref/heads/{Uri.EscapeDataString(branch)}", null, GitHubJsonContext.Default.GhRef, ct)!;
+
+    public Task CreateBranchAsync(string repo, string branch, string sha, CancellationToken ct) =>
+        SendAsync<GhRef>(HttpMethod.Post, $"repos/{repo}/git/refs", w =>
+        {
+            w.WriteString("ref", "refs/heads/" + branch);
+            w.WriteString("sha", sha);
+        }, null, ct);
+
+    /// <summary>Creates a file on a branch (contents API). Fails with 422 when the file already exists.</summary>
+    public Task<GhContentResult> CreateFileAsync(string repo, string path, string branch, byte[] content, string message, CancellationToken ct) =>
+        SendAsync(HttpMethod.Put, $"repos/{repo}/contents/{string.Join('/', path.Split('/').Select(Uri.EscapeDataString))}", w =>
+        {
+            w.WriteString("message", message);
+            w.WriteString("branch", branch);
+            w.WriteBase64String("content", content);
+        }, GitHubJsonContext.Default.GhContentResult, ct)!;
+
+    /// <summary>
+    /// Downloads an issue attachment. The token is sent only to the GitHub web host itself (private-repository
+    /// attachments need it); redirects to storage hosts never carry it.
+    /// </summary>
+    public async Task<GhDownload> DownloadAsync(Uri url, long maxBytes, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (string.Equals(url.Host, WebHost, StringComparison.OrdinalIgnoreCase) && url.Scheme == Uri.UriSchemeHttps)
+        {
+            request.Headers.Authorization = _authorization;
+        }
+
+        request.Headers.Accept.Clear();
+        request.Headers.Accept.ParseAdd("*/*");
+        var client = httpClientFactory.CreateClient(GitHubModule.HttpClientName);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new GitHubApiException(response.StatusCode, $"Download {(int)response.StatusCode}: {url}");
+        }
+
+        if (response.Content.Headers.ContentLength > maxBytes)
+        {
+            throw new GitHubApiException(HttpStatusCode.RequestEntityTooLarge, $"Attachment larger than {maxBytes / (1024 * 1024)} MB: {url}");
+        }
+
+        var data = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        var name = response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+        return new GhDownload(data, response.Content.Headers.ContentType?.MediaType, name);
+    }
 
     public Task<GhIssue> GetIssueAsync(string repo, int number, CancellationToken ct) =>
         SendAsync(HttpMethod.Get, $"repos/{repo}/issues/{number}", null, GitHubJsonContext.Default.GhIssue, ct)!;

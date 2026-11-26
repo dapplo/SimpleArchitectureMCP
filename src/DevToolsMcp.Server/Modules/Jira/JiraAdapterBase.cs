@@ -14,7 +14,7 @@ public abstract class JiraAdapterBase(IHttpClientFactory httpClientFactory, Uri 
     protected const string Api = "rest/api/2/";
 
     /// <summary>Fields fetched for <c>jira_get_issue</c>; everything else (custom fields, changelog, ...) is never requested.</summary>
-    internal const string IssueFields = "summary,description,status,issuetype,priority,resolution,assignee,reporter,labels,parent,attachment,created,updated";
+    internal const string IssueFields = "summary,description,status,issuetype,priority,resolution,assignee,reporter,labels,parent,attachment,subtasks,issuelinks,fixVersions,components,created,updated";
 
     /// <summary>Fields fetched per search hit.</summary>
     internal const string SearchFields = "summary,status,issuetype,assignee,updated";
@@ -23,7 +23,7 @@ public abstract class JiraAdapterBase(IHttpClientFactory httpClientFactory, Uri 
 
     public Uri SiteBase { get; } = baseAddress;
 
-    public abstract Task<JiraSearchResponse> SearchAsync(string jql, int limit, CancellationToken ct);
+    public abstract Task<JiraSearchResponse> SearchAsync(string jql, int limit, string? cursor, CancellationToken ct, string fields = SearchFields);
 
     public abstract Task<IReadOnlyList<JiraUser>> FindUsersAsync(string query, CancellationToken ct);
 
@@ -37,6 +37,34 @@ public abstract class JiraAdapterBase(IHttpClientFactory httpClientFactory, Uri 
     public Task<JiraCommentPage> GetCommentsAsync(string key, int limit, CancellationToken ct) =>
         GetAsync($"{Api}issue/{Uri.EscapeDataString(key)}/comment?orderBy=-created&maxResults={limit}",
             JiraJsonContext.Default.JiraCommentPage, ct);
+
+    public Task<JiraCommentPage> GetCommentsPageAsync(string key, int startAt, int limit, CancellationToken ct) =>
+        GetAsync($"{Api}issue/{Uri.EscapeDataString(key)}/comment?orderBy=created&startAt={startAt}&maxResults={limit}",
+            JiraJsonContext.Default.JiraCommentPage, ct);
+
+    public async Task<byte[]> DownloadAsync(string url, long maxBytes, CancellationToken ct)
+    {
+        var uri = new Uri(SiteBase, url);
+        if (!string.Equals(uri.Host, SiteBase.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new JiraApiException(HttpStatusCode.BadRequest, $"Refusing to send Jira credentials to {uri.Host}.");
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.Accept.ParseAdd("*/*");
+        using var response = await SendRawAsync(request, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await CreateErrorAsync(response, ct).ConfigureAwait(false);
+        }
+
+        if (response.Content.Headers.ContentLength > maxBytes)
+        {
+            throw new JiraApiException(HttpStatusCode.RequestEntityTooLarge, $"Attachment larger than {maxBytes / (1024 * 1024)} MB.");
+        }
+
+        return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+    }
 
     public Task<JiraCreated> CreateIssueAsync(JiraCreateFields fields, CancellationToken ct) =>
         SendAsync(HttpMethod.Post, $"{Api}issue", new JiraCreateRequest { Fields = fields },
