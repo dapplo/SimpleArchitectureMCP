@@ -6,7 +6,7 @@ using ModelContextProtocol.Server;
 namespace DevToolsMcp.Server.Modules.Confluence;
 
 /// <summary>
-/// The seven Confluence tools. Descriptions are intentionally terse: every word here is paid for in every prompt.
+/// The eight Confluence tools. Descriptions are intentionally terse: every word here is paid for in every prompt.
 /// </summary>
 [McpServerToolType]
 public sealed class ConfluenceTools(ConfluenceService confluence)
@@ -27,6 +27,15 @@ public sealed class ConfluenceTools(ConfluenceService confluence)
         [Description("markdown or storage")] string format = "markdown",
         CancellationToken cancellationToken = default) =>
         Run("confluence_get_page", () => confluence.GetPageAsync(page_id, format, cancellationToken));
+
+    [McpServerTool(Name = "confluence_export_page", Destructive = false, Idempotent = true)]
+    [Description("Save a page as a local Markdown file (like confluence_get_page) without returning its body.")]
+    public Task<string> ExportPage(
+        string page_id,
+        [Description(".md file, or folder (file named after the title)")] string save_to,
+        [Description("markdown or storage")] string format = "markdown",
+        CancellationToken cancellationToken = default) =>
+        Run("confluence_export_page", () => confluence.ExportPageAsync(page_id, save_to, format, cancellationToken));
 
     [McpServerTool(Name = "confluence_get_page_children", ReadOnly = true, Idempotent = true)]
     [Description("List child pages as id | title.")]

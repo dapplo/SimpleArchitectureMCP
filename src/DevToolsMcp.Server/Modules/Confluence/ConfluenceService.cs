@@ -56,11 +56,52 @@ public sealed partial class ConfluenceService
     {
         var storage = IsStorage(format);
         var page = await Api.GetPageAsync(ValidateId(pageId), includeBody: true, ct).ConfigureAwait(false);
-        var body = page.StorageBody ?? string.Empty;
-        var header = $"---\nid: {page.Id}\ntitle: {page.Title}\nversion: {page.Version}\n---\n";
-        // The Markdown is appended to the header directly: large pages are not copied once more.
-        return storage ? header + body : ConfluenceMarkupConverter.ToMarkdown(body, new StringBuilder(header)).ToString();
+        return RenderPage(page, storage).ToString();
     }
+
+    /// <summary>
+    /// Writes the page (same content as <see cref="GetPageAsync"/>) to a local file and returns only a one-line
+    /// confirmation, so the body never enters the conversation.
+    /// </summary>
+    public async Task<string> ExportPageAsync(string pageId, string? saveTo, string? format, CancellationToken ct)
+    {
+        var storage = IsStorage(format);
+        if (string.IsNullOrWhiteSpace(saveTo))
+        {
+            throw new ArgumentException("save_to is required.");
+        }
+
+        var page = await Api.GetPageAsync(ValidateId(pageId), includeBody: true, ct).ConfigureAwait(false);
+        var extensions = storage ? StorageExtensions : MarkdownExtensions;
+        // Validated after fetching: the default file name comes from the title.
+        var file = LocalSavePath.Validate(saveTo, LocalSavePath.FileName(page.Title, extensions[0]), extensions);
+        var content = RenderPage(page, storage);
+        try
+        {
+            file.Directory?.Create();
+            await using (var writer = new StreamWriter(file.FullName, append: false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
+            {
+                await writer.WriteAsync(content, ct).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new ArgumentException($"Could not write {file.FullName}: {ex.Message}", ex);
+        }
+
+        file.Refresh();
+        return $"Saved {page.Id} '{page.Title}' v{page.Version} to {file.FullName} ({Math.Max(1, file.Length / 1024)} KB).";
+    }
+
+    private static StringBuilder RenderPage(ConfluencePage page, bool storage)
+    {
+        var header = new StringBuilder($"---\nid: {page.Id}\ntitle: {page.Title}\nversion: {page.Version}\n---\n");
+        // The Markdown is appended to the header directly: large pages are not copied once more.
+        return storage ? header.Append(page.StorageBody) : ConfluenceMarkupConverter.ToMarkdown(page.StorageBody ?? string.Empty, header);
+    }
+
+    private static readonly string[] MarkdownExtensions = [".md", ".markdown", ".txt"];
+    private static readonly string[] StorageExtensions = [".xhtml", ".html", ".xml", ".txt"];
 
     public async Task<string> GetChildrenAsync(string pageId, int limit, CancellationToken ct)
     {
