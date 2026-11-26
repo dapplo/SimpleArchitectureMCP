@@ -48,6 +48,11 @@ public static class JiraModule
                 var state = sp.GetRequiredService<JiraConnection>().Current;
                 return new ModuleStatus(state.Adapter is not null, state.Message);
             },
+            Conversions =
+            [
+                new("issue-md", "Issue → Markdown (.md)", "text", "Issue key or URL, e.g. ABC-123", null,
+                    (sp, input, ct) => sp.GetRequiredService<JiraService>().DownloadIssueAsync(input.Text!, ct)),
+            ],
             Test = async (sp, ct) =>
             {
                 var api = sp.GetRequiredService<JiraConnection>().Adapter;

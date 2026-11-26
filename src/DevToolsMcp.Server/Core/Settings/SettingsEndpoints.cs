@@ -5,7 +5,10 @@ namespace DevToolsMcp.Server.Core.Settings;
 
 public sealed record SettingView(string Key, string Label, string Kind, bool Required, string? Help, IReadOnlyList<string>? Options, string? Value, bool HasValue);
 
-public sealed record ModuleView(string Name, string Title, bool Active, string Status, IReadOnlyList<SettingView> Settings);
+public sealed record ConversionView(string Key, string Label, string Input, string? Placeholder, string? Accept);
+
+public sealed record ModuleView(string Name, string Title, bool Active, string Status, IReadOnlyList<SettingView> Settings,
+    IReadOnlyList<ConversionView> Conversions);
 
 public sealed record ModulesView(string McpUrl, string SettingsFile, IReadOnlyList<ModuleView> Modules);
 
@@ -104,7 +107,90 @@ public static class SettingsEndpoints
             }
         });
 
+        // Manual conversions: multipart form with "text" or "file"; answers with the converted file as a download.
+        api.MapPost("/{name}/convert/{key}", (string name, string key, HttpRequest request, IServiceProvider sp, CancellationToken ct) =>
+            ConvertAsync(registry.Find(name), key, request, sp, ct));
+
         return app;
+    }
+
+    /// <summary>Largest accepted upload; Archi models are typically well below 10 MB.</summary>
+    internal const long MaxUploadBytes = 25 * 1024 * 1024;
+
+    private static async Task<IResult> ConvertAsync(ModuleDescriptor? module, string key, HttpRequest request, IServiceProvider sp, CancellationToken ct)
+    {
+        var conversion = module?.Conversions.FirstOrDefault(c => string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+        if (module is null || conversion is null)
+        {
+            return Results.NotFound(new ResultView(false, $"Unknown conversion '{module?.Name ?? "?"}/{key}'."));
+        }
+
+        if (module.Status(sp) is { Active: false } status)
+        {
+            return Results.BadRequest(new ResultView(false, status.Message));
+        }
+
+        string? work = null;
+        try
+        {
+            if (!request.HasFormContentType)
+            {
+                return Results.BadRequest(new ResultView(false, "Expected a form."));
+            }
+
+            var form = await request.ReadFormAsync(ct).ConfigureAwait(false);
+            string? text = form["text"].ToString().Trim();
+            string? path = null;
+            if (conversion.Input == "file")
+            {
+                if (form.Files.GetFile("file") is not { Length: > 0 } upload)
+                {
+                    return Results.BadRequest(new ResultView(false, "Choose a file."));
+                }
+
+                if (upload.Length > MaxUploadBytes)
+                {
+                    return Results.BadRequest(new ResultView(false, $"File is larger than {MaxUploadBytes / 1024 / 1024} MB."));
+                }
+
+                // Only the uploaded name's extension and a sanitized base name are kept; the folder is ours.
+                work = Path.Combine(Path.GetTempPath(), "devtools-mcp", "convert-" + Guid.NewGuid().ToString("N")[..12]);
+                Directory.CreateDirectory(work);
+                var fileName = Path.GetFileName(upload.FileName);
+                path = Path.Combine(work, Security.LocalSavePath.FileName(Path.GetFileNameWithoutExtension(fileName), Path.GetExtension(fileName).ToLowerInvariant()));
+                await using (var target = File.Create(path))
+                {
+                    await upload.CopyToAsync(target, ct).ConfigureAwait(false);
+                }
+            }
+            else if (string.IsNullOrEmpty(text))
+            {
+                return Results.BadRequest(new ResultView(false, "Enter a value."));
+            }
+
+            var result = await conversion.Run(sp, new ConversionInput(text, path), ct).ConfigureAwait(false);
+            return Results.File(result.Content, result.ContentType, result.FileName);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Results.BadRequest(new ResultView(false, ex.Message));
+        }
+        finally
+        {
+            if (work is not null)
+            {
+                try
+                {
+                    Directory.Delete(work, recursive: true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
+        }
     }
 
     private static ModuleView View(ModuleDescriptor module, IConfiguration config, IServiceProvider sp)
@@ -116,7 +202,8 @@ public static class SettingsEndpoints
             var secret = s.Kind == "secret";
             return new SettingView(s.Key, s.Label, s.Kind, s.Required, s.Help, s.Options, secret ? null : value, !string.IsNullOrEmpty(value));
         }).ToList();
-        return new ModuleView(module.Name, module.Title, status.Active, status.Message, settings);
+        var conversions = module.Conversions.Select(c => new ConversionView(c.Key, c.Label, c.Input, c.Placeholder, c.Accept)).ToList();
+        return new ModuleView(module.Name, module.Title, status.Active, status.Message, settings, conversions);
     }
 
     /// <summary>Blocks DNS rebinding (Host must be loopback) and cross-site requests (Origin must match).</summary>

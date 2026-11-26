@@ -44,6 +44,19 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 
 Settings are stored per user in `%APPDATA%\devtools-mcp\settings.json` (Windows) or `~/.config/devtools-mcp/settings.json` (Linux/macOS), readable only by you on Linux/macOS. Environment variables and `appsettings.json` work too; environment variables win over the settings page.
 
+### Convert & download
+
+Each configured tab also has a **Convert & download** box for doing things by hand, without an agent (these are not MCP tools, so they cost no tokens):
+
+| Tab | Input | Download |
+|---|---|---|
+| Confluence | page id or page URL | the page as Markdown (`.md`, same content as `confluence_get_page`) |
+| Jira | issue key or URL | the issue with its comments as Markdown |
+| GitHub | `owner/repo#123`, `#123` (default repository) or an issue/PR URL | the issue or PR with its comments as Markdown |
+| Archi | an uploaded Open Exchange `.xml` or `.archimate` file | **PNG** (one view) or a `.zip` of PNGs; a **draw.io** file (a page per view); or the **other format** (`.xml` ⇄ `.archimate`) |
+
+Uploads (up to 25 MB) go to a temporary folder that is deleted after the conversion; nothing is written to the Archi output folder.
+
 ## Repository layout
 
 ```
@@ -357,7 +370,7 @@ mcp.AddConfluenceModule(builder.Configuration, json.McpOptions);
 mcp.AddJiraModule(builder.Configuration, json.McpOptions);                                  // 3)
 ```
 
-The settings page renders the new module's form automatically. In the AppHost, one `Provider.Create(builder, "jira", "Jira", …)` line gives the `jira-url`, `jira-email` and `jira-token` parameters and the `Jira__*` environment variables (`Modules/GitHub` and its `Provider.Create(builder, "github", "GitHub", withEmail: false, optional: true)` line are a second, smaller example). Prefix the tool names (`jira_*`, `github_*`) so they never collide.
+The settings page renders the new module's form automatically. To offer a manual conversion on its tab, add a `ModuleConversion` to the descriptor's `Conversions` (a `text` or `file` input and a function that returns the file to download). In the AppHost, one `Provider.Create(builder, "jira", "Jira", …)` line gives the `jira-url`, `jira-email` and `jira-token` parameters and the `Jira__*` environment variables (`Modules/GitHub` and its `Provider.Create(builder, "github", "GitHub", withEmail: false, optional: true)` line are a second, smaller example). Prefix the tool names (`jira_*`, `github_*`) so they never collide.
 
 ## License
 

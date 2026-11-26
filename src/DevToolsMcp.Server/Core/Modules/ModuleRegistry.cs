@@ -31,6 +31,9 @@ public sealed class ModuleDescriptor
 
     /// <summary>Optional connectivity check used by the settings page ("Test connection").</summary>
     public Func<IServiceProvider, CancellationToken, Task<string>>? Test { get; init; }
+
+    /// <summary>Manual conversions offered on the settings page while the module is active (never MCP tools).</summary>
+    public IReadOnlyList<ModuleConversion> Conversions { get; init; } = [];
 }
 
 /// <summary>All registered modules. Shared by /health, the settings page and the tool gate.</summary>

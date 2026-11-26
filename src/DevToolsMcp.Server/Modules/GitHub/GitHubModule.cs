@@ -48,6 +48,11 @@ public static class GitHubModule
                 var state = sp.GetRequiredService<GitHubConnection>().Current;
                 return new ModuleStatus(state.Api is not null, state.Message);
             },
+            Conversions =
+            [
+                new("issue-md", "Issue / PR → Markdown (.md)", "text", "owner/repo#123, #123 or URL", null,
+                    (sp, input, ct) => sp.GetRequiredService<GitHubService>().DownloadIssueAsync(input.Text!, ct)),
+            ],
             Test = async (sp, ct) =>
             {
                 var api = sp.GetRequiredService<GitHubConnection>().Api;
