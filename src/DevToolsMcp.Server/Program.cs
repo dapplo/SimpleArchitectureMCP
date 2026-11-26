@@ -13,6 +13,7 @@ using DevToolsMcp.Server.Modules.Migration;
 // The settings page and /health stay on HTTP; stdout carries only protocol messages, logs go to stderr.
 var stdio = args.Any(a => string.Equals(a, "--stdio", StringComparison.OrdinalIgnoreCase));
 args = [.. args.Where(a => !string.Equals(a, "--stdio", StringComparison.OrdinalIgnoreCase))];
+args = ToolScopeArgs.Expand(args);   // --tools jira,github  ->  --DevToolsMcp:Tools=jira,github
 
 var builder = WebApplication.CreateSlimBuilder(args);
 if (stdio)
@@ -80,6 +81,7 @@ app.UseOptionalApiKey();
 app.MapGet("/health", (IServiceProvider sp) => new HealthResponse("ok", registry.ActiveModules(sp).ToList()));
 app.MapSettings(store, baseUrl + "mcp");
 app.MapMcp("/mcp");
+app.MapMcp("/mcp/{" + ToolScope.RouteKey + "}");   // e.g. /mcp/jira,github: only those tools (see ToolScope)
 
 app.Lifetime.ApplicationStarted.Register(() =>
 {

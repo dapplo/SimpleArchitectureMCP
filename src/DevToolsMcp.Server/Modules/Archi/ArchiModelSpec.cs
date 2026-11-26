@@ -12,7 +12,6 @@ public sealed class ArchiModelSpec
 {
     public string? Name { get; set; }
 
-    [Description("Documentation")]
     public string? Doc { get; set; }
 
     public List<ElementSpec> Elements { get; set; } = [];

@@ -292,6 +292,20 @@ args = ["--stdio"]
 
 or `codex mcp add devtools-mcp -- /path/to/devtools-mcp --stdio`. `/mcp` inside Codex lists the connected servers.
 
+## Only the tools a client needs
+
+Every tool definition is sent to the model on every request, so give each client only what it uses. The path after `/mcp/` picks the tools; all endpoints are served by the same process on the same port:
+
+| Endpoint | Tools |
+| --- | --- |
+| `http://localhost:5180/mcp` | All configured tools (or the `DevToolsMcp:Tools` default) |
+| `http://localhost:5180/mcp/jira,github` | Only the Jira and GitHub modules |
+| `http://localhost:5180/mcp/confluence,-confluence_export_page` | Confluence without one tool |
+| `http://localhost:5180/mcp/readonly` | Only tools that change nothing (search, get, list) |
+| `http://localhost:5180/mcp/jira+readonly` | Read-only Jira tools |
+
+Module names are `confluence`, `jira`, `github`, `archi` and `migration`; any tool name works too. For stdio, add `--tools jira,github` to the arguments. A call to a tool outside the endpoint's scope is refused.
+
 ## Other clients
 
 * **Supports Streamable HTTP?** Use `http://localhost:5180/mcp`. Pick "HTTP" or "Streamable HTTP", not the older "SSE" transport.

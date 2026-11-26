@@ -26,11 +26,11 @@ public sealed class GitHubTools(GitHubService github)
         ToolErrors.RunAsync("github_search_issues", Service, () => github.SearchAsync(query, repo, limit, page, cancellationToken), cancellationToken);
 
     [McpServerTool(Name = "github_get_issue", ReadOnly = true, Idempotent = true)]
-    [Description("Get an issue with metadata, body and the latest comments ([comment_id] @author date).")]
+    [Description("Get an issue: metadata, body, latest comments ([comment_id] @author date).")]
     public Task<string> GetIssue(
         int number,
         [Description(Repo)] string? repo = null,
-        [Description("Latest comments to include, 0-100")] int comments = 20,
+        [Description("Latest comments, 0-100")] int comments = 5,
         CancellationToken cancellationToken = default) =>
         ToolErrors.RunAsync("github_get_issue", Service, () => github.GetIssueAsync(repo, number, comments, cancellationToken), cancellationToken);
 
