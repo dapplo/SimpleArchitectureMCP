@@ -11,6 +11,9 @@ Provider[] providers =
     Provider.Create(builder, "github", "GitHub", withEmail: false, optional: true),
 ];
 
+// Archi (ArchiMate diagrams) needs a local path, not a URL/token pair.
+var archiPath = builder.AddParameter("archi-path").AsOptional().WithDescription("Path to the Archi executable (Archi.exe, Archi or Archi.app)");
+
 // Prefer the published Native AOT single-file binary (sub-50 ms start); fall back to the project during development.
 // Publish it with:  dotnet publish src/DevToolsMcp.Server -c Release -r <rid> -o artifacts/publish/<rid>
 var binary = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "artifacts", "publish",
@@ -20,12 +23,14 @@ if (File.Exists(binary))
 {
     builder.AddExecutable("devtools-mcp", binary, Path.GetDirectoryName(binary)!)
         .WithOtlpExporter()
-        .ConfigureMcpServer(providers);
+        .ConfigureMcpServer(providers)
+        .WithEnvironment("Archi__ExecutablePath", archiPath);
 }
 else
 {
     builder.AddDotnetProject("devtools-mcp", Path.Combine("..", "DevToolsMcp.Server", "DevToolsMcp.Server.csproj"))
-        .ConfigureMcpServer(providers);
+        .ConfigureMcpServer(providers)
+        .WithEnvironment("Archi__ExecutablePath", archiPath);
 }
 
 builder.Build().Run();

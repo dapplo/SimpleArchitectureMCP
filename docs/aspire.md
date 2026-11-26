@@ -29,6 +29,7 @@ The AppHost defines one set of parameters per provider and injects them as envir
 | `confluence-email`, `confluence-deployment` (`Auto`) | `Confluence__Email`, `Confluence__DeploymentType` | no |
 | `jira-url`, `jira-token`, `jira-email`, `jira-deployment` | `Jira__*` | no |
 | `github-url`, `github-token` | `GitHub__BaseUrl`, `GitHub__ApiToken` | no |
+| `archi-path` | `Archi__ExecutablePath` | no |
 
 The dashboard asks for missing required values on start. To store them once, use user secrets:
 

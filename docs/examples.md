@@ -48,6 +48,13 @@ Set `GitHub:DefaultRepo` (or the *Default repository* field on the settings page
 * "Add the `good first issue` label to #17, #18 and #21 and remove `needs-triage`." (`github_update_issue` once per issue: labels, assignees, state and title change in one call)
 * "Fix the typo in my last comment on #42." (`github_get_issue` to find the comment id, then `github_comment` with `comment_id`)
 
+## ArchiMate diagrams (Archi)
+
+* "Draw an ArchiMate diagram of our order flow: customers place orders in the web shop, which runs on a VM and stores orders in Postgres." (`archi_create_model`: the model sends ids, types and names; layout and the PNG come back as a path)
+* "Render the 'Application landscape' view of `~/models/enterprise.archimate`." (`archi_render` with `views`)
+* "Show me the diagram." (`archi_render` or `archi_create_model` with `inline=true`, the only time the image itself enters the conversation)
+* "Turn the components listed on Confluence page 'Platform overview' into an ArchiMate model and attach the PNG to PROJ-12." (`confluence_get_page`, `archi_create_model`, `jira_attach_file`)
+
 ## Workflows across tools
 
 These combine providers in one conversation. They are where a local server pays off most: each step is a short line or a compact Markdown page instead of a full API object.

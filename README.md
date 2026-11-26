@@ -6,7 +6,7 @@ A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io
 * Published as a **single-file, self-contained Native AOT** executable (~24 MB, about 60–80 ms from launch to healthy)
 * **Double-click to run**: a built-in settings page (`http://localhost:5180/`) opens on first start; paste your URL and token and the tools switch on without a restart
 * Optional **Aspire 17** AppHost for development, with OpenTelemetry traces, metrics and logs in the Aspire dashboard
-* Integrations: **Atlassian Confluence** and **Jira** (Cloud and Data Center / Server) and **GitHub issues** (github.com and GitHub Enterprise)
+* Integrations: **Atlassian Confluence** and **Jira** (Cloud and Data Center / Server), **GitHub issues** (github.com and GitHub Enterprise) and **ArchiMate diagrams** (PNG export with a local [Archi](https://www.archimatetool.com) install, Open Exchange Format from compact JSON)
 * Vertical feature slices, so further providers plug in without touching the core
 
 ## Documentation
@@ -23,11 +23,13 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 | Technique | Effect |
 | --- | --- |
 | Tools of unconfigured modules are **hidden from `tools/list`** | Unused integrations add zero schema tokens |
-| Terse tool descriptions, primitive parameters | All 6 Confluence tool schemas total ≈ 2.3 KB (~575 tokens); the 7 Jira tools ≈ 3.1 KB (~780 tokens); the 6 GitHub tools ≈ 3.2 KB (~800 tokens) |
+| Terse tool descriptions, primitive parameters | All 6 Confluence tool schemas total ≈ 2.3 KB (~575 tokens); the 7 Jira tools ≈ 3.1 KB (~780 tokens); the 6 GitHub tools ≈ 3.2 KB (~800 tokens); the 2 Archi tools ≈ 3.4 KB (~850 tokens) |
 | Jira issues are returned as front matter + **Markdown**, with only the fields that matter | No custom fields, avatars, `self` links or changelog |
 | Pages are returned as **Markdown**, not storage XHTML | Usually several times smaller than the raw body |
 | Search/children return one `id \| title \| …` line per hit | No `_links`, `_expandable`, reactions, node ids or user objects |
 | One `github_update_issue` for edit, close/reopen, labels and assignees | One schema instead of five; a single call changes several things |
+| Archi tools return **PNG paths**, not pictures, unless `inline=true` | A path costs a few tokens; an image costs hundreds or more |
+| `archi_create_model` takes ids + types + names; layout is automatic | No coordinates, styles or XML in the prompt |
 | `confluence_append_to_page` | Adds content without the model re-sending the whole page |
 | Automatic version handling | No failed calls and retries for version conflicts |
 | `devtools.mcp.tool.output.size` metric | See exactly how many characters each tool returns |
@@ -80,6 +82,14 @@ src/
       GitHubJsonContext.cs       Source-generated DTOs
       GitHubService.cs           Validation, repo resolution, compact output
       GitHubTools.cs             The 6 MCP tools
+    Modules/Archi/               ArchiMate diagrams through a local Archi install
+      ArchiModule.cs             AddArchiModule(): conditional registration, settings form
+      ArchiOptions.cs            Executable, renderer, output folder, scale, timeout
+      ArchiModelSpec.cs          The compact JSON model (source-generated context)
+      ExchangeModelBuilder.cs    JSON -> Open Exchange Format XML with automatic layout
+      ArchiRunner.cs             Runs Archi's command line (xvfb-run on headless Linux)
+      ArchiService.cs            Render via HTML report or jArchi script, collect PNGs
+      ArchiTools.cs              The 2 MCP tools
   DevToolsMcp.AppHost/           Aspire 17 AppHost
 tests/DevToolsMcp.Tests/         xUnit v3 tests, grouped by slice
 .vscode/mcp.json                 VS Code / GitHub Copilot client config
@@ -171,6 +181,58 @@ Jira configuration mirrors Confluence: `Jira:BaseUrl`, `Jira:Email` (Cloud only)
 | `GitHub:DefaultRepo` (`GitHub__DefaultRepo`) | Optional `owner/repo` used when a call omits `repo` |
 | `GitHub:TimeoutSeconds` | Total request timeout (default 30) |
 
+## Archi tools
+
+Renders ArchiMate views to PNG with your local [Archi](https://www.archimatetool.com) (5.x), headless through its command line, and writes [Open Exchange Format](https://www.opengroup.org/open-group-archimate-model-exchange-file-format) files from a compact JSON model.
+
+| Tool | Inputs | Returns |
+| --- | --- | --- |
+| `archi_render` | `file` (`.archimate` or exchange `.xml`), `views?` (names or ids, default all), `out_dir?`, `inline` (false) | `view \| png path \| WxH` per view, plus the images when `inline` |
+| `archi_create_model` | `model` (JSON below), `path?` (`.xml`), `render` (true), `inline` (false) | `<xml path> (n elements, n relationships, views: …)` then the `archi_render` lines |
+
+```json
+{
+  "name": "Web shop",
+  "elements": [
+    { "id": "cust", "type": "BusinessActor", "name": "Customer" },
+    { "id": "order", "type": "BusinessProcess", "name": "Place order" },
+    { "id": "shop", "type": "ApplicationComponent", "name": "Shop" },
+    { "id": "db", "type": "DataObject", "name": "Orders" },
+    { "id": "srv", "type": "Node", "name": "Web server" }
+  ],
+  "relationships": [
+    { "type": "Assignment", "source": "cust", "target": "order" },
+    { "type": "Serving", "source": "shop", "target": "order" },
+    { "type": "Access", "source": "shop", "target": "db", "access": "ReadWrite" },
+    { "type": "Realization", "source": "srv", "target": "shop" }
+  ],
+  "views": [
+    { "name": "Overview" },
+    { "name": "Deployment", "nodes": [ { "ref": "srv", "nodes": [ { "ref": "shop" } ] } ] }
+  ]
+}
+```
+
+* `type` is any ArchiMate 3.1 element type (`BusinessActor`, `ApplicationComponent`, `Node`, `Goal`, `WorkPackage`, `Grouping`, `Location`, `AndJunction`/`OrJunction`, …; case and spaces don't matter) and relationship type (`Composition`, `Aggregation`, `Assignment`, `Realization`, `Serving`, `Access`, `Influence`, `Triggering`, `Flow`, `Specialization`, `Association`).
+* Without `views` there is one view with every element. A view lists `elements` (auto layout) and/or `nodes` (nesting; optional `x`/`y`/`w`/`h`, relative to the parent). Auto layout puts each ArchiMate layer in its own row band, top to bottom: motivation, strategy, business, application, technology, physical, implementation, other. Parents grow to fit nested children.
+* Every relationship whose ends are both on a view is drawn (`"connections": false` turns that off), except structural ones between a parent and its nested child, which the nesting already shows.
+* Errors are collected into one message (unknown types, duplicate ids, dangling references), so a model can fix them in one go. The output validates against the Open Group `archimate3_Diagram.xsd`.
+* PNGs are named after their views and overwrite older ones. Tools only write `.png`/`.xml` files and refuse hidden or `AppData` folders (except the configured output folder).
+
+**Renderer.** `HtmlReport` (default) works with plain Archi: it imports the model, creates Archi's HTML report in a temporary folder and takes the view PNGs from it (100% scale). `jArchi` runs a generated script with the [jArchi scripting plugin](https://www.archimatetool.com/plugins/) instead: it renders only the requested views, faster, and honours `Archi:Scale` and `Archi:Margin`. **Test connection** on the settings page tells you whether jArchi is installed.
+
+**Headless Linux.** Archi is an SWT application and needs a display even on the command line. Without `DISPLAY`/`WAYLAND_DISPLAY`, devtools-mcp runs it through `xvfb-run -a` (install `xvfb`). One Archi process runs at a time; a run usually takes a few seconds for the JVM start.
+
+| Key (env var) | Meaning |
+| --- | --- |
+| `Archi:ExecutablePath` (`Archi__ExecutablePath`) | Required to enable the module: `Archi.exe` (Windows), the `Archi` launcher (Linux), `Archi.app` (macOS) or the folder that contains it |
+| `Archi:Renderer` | `HtmlReport` (default) or `jArchi` |
+| `Archi:OutputDirectory` | Where PNG and `.xml` files go when a call names no path (default `<temp>/devtools-mcp/archi`) |
+| `Archi:Scale`, `Archi:Margin` | jArchi only: scale in percent (50–400, default 100) and border in pixels (default 10) |
+| `Archi:TimeoutSeconds` | Per Archi run (default 120) |
+
+The settings page shows the first three; scale, margin and timeout are set in `appsettings.json` or environment variables.
+
 ## Configuration
 
 | Key (env var) | Meaning |
@@ -229,7 +291,7 @@ aspire run --project src/DevToolsMcp.AppHost
 The AppHost:
 
 * defines the parameters `confluence-url`, `confluence-email` (optional), `confluence-token` (secret) and `confluence-deployment`, and injects them as `Confluence__BaseUrl`, `Confluence__Email`, `Confluence__ApiToken` and `Confluence__DeploymentType`. The `jira-*` parameters work the same way for `Jira__*`, but are optional so they never block startup. Fill them in when the dashboard prompts, or with `dotnet user-secrets set Parameters:confluence-token … --project src/DevToolsMcp.AppHost`;
-* defines the optional parameters `github-url` and `github-token` (secret), injected as `GitHub__BaseUrl` and `GitHub__ApiToken`. They never block startup; leave them empty to configure GitHub on the settings page instead;
+* defines the optional parameters `github-url` and `github-token` (secret), injected as `GitHub__BaseUrl` and `GitHub__ApiToken`. They never block startup; leave them empty to configure GitHub on the settings page instead. The optional `archi-path` becomes `Archi__ExecutablePath`;
 * launches the **published AOT binary** through `AddExecutable` when `artifacts/publish/<current-rid>/devtools-mcp` exists. Otherwise it falls back to the project (`AddDotnetProject`);
 * exposes `http://localhost:5180` (Aspire proxy → `PORT`), marks it with `.WithMcpServer(path: "/mcp")`, adds a `/health` check, and wires OTLP so tool calls, downstream Confluence calls, latencies and payload sizes (`devtools.http.client.response.body.size`) show up in the dashboard.
 
