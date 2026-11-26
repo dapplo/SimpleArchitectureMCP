@@ -53,10 +53,27 @@ public sealed class MigrationServiceTests : IDisposable
 
     private static void GitHubTarget(FakeHttp gh)
     {
+        gh.On("GET", "/repos/o/r", """{"default_branch":"main","permissions":{"push":true}}""");
         gh.On("GET", "/repos/o/r/milestones?state=all&per_page=100", """[{"number":3,"title":"1.0"}]""");
         gh.On("POST", "/repos/o/r/issues", """{"id":900,"number":45,"html_url":"https://github.com/o/r/issues/45"}""", HttpStatusCode.Created);
         gh.On("POST", "/repos/o/r/issues/45/comments", """{"id":1}""", HttpStatusCode.Created);
         gh.On("PATCH", "/repos/o/r/issues/45", """{"number":45}""");
+    }
+
+    [Theory]
+    [InlineData("""{"default_branch":"main","permissions":{"push":false}}""")] // a public repo anyone may open issues in
+    [InlineData("""{"default_branch":"main"}""")]
+    public async Task Jira_to_GitHub_refuses_repositories_the_user_cannot_push_to(string repo)
+    {
+        var (svc, jira, gh) = Create();
+        JiraSource(jira);
+        GitHubTarget(gh);
+        gh.On("GET", "/repos/o/r", repo);
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => svc.MigrateAsync("o/r", ["OPS-7"], null, null, 10, false, Ct));
+
+        Assert.Contains("no write access", ex.Message);
+        Assert.DoesNotContain(gh.Requests, r => r.Method != HttpMethod.Get);
     }
 
     [Fact]
