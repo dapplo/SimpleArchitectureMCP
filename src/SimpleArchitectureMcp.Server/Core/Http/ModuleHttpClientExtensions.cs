@@ -1,0 +1,69 @@
+using System.Net;
+using System.Net.Http.Headers;
+using Microsoft.Extensions.Http.Resilience;
+
+namespace SimpleArchitectureMcp.Server.Core.Http;
+
+public static class ModuleHttpClientExtensions
+{
+    /// <summary>
+    /// Registers an isolated named HttpClient for an integration module: payload metrics, a standard resilience
+    /// pipeline (retries only for safe/idempotent methods), gzip/deflate/brotli responses and, optionally, a fixed base address and credentials.
+    /// Modules whose settings can change at runtime leave those null and set them per adapter/request instead.
+    /// HttpClient tracing/metrics are picked up by OpenTelemetry automatically.
+    /// </summary>
+    public static IHttpClientBuilder AddModuleHttpClient(this IServiceCollection services, string name, TimeSpan timeout,
+        Uri? baseAddress = null, AuthenticationHeaderValue? authorization = null)
+    {
+        var builder = services
+            .AddHttpClient(name, client =>
+            {
+                if (baseAddress is not null)
+                {
+                    client.BaseAddress = baseAddress;
+                }
+
+                client.Timeout = Timeout.InfiniteTimeSpan; // up to the response headers: resilience pipeline; body: the caller's token
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("simple-architecture-mcp", "1.0"));
+            })
+            .ConfigurePrimaryHttpMessageHandler((handler, _) =>
+            {
+                // Atlassian and GitHub compress JSON 5-10x; the body is decompressed while it streams.
+                switch (handler)
+                {
+                    case HttpClientHandler h:
+                        h.AutomaticDecompression = DecompressionMethods.All;
+                        break;
+                    case SocketsHttpHandler s:
+                        s.AutomaticDecompression = DecompressionMethods.All;
+                        break;
+                }
+            })
+            .AddHttpMessageHandler(() => new PayloadMetricsHandler(name));
+
+        if (authorization is not null)
+        {
+            builder.AddHttpMessageHandler(() => new StaticAuthHandler(authorization));
+        }
+
+        // Outside the resilience pipeline: a Retry-After wait must not count against the request timeout.
+        builder.AddHttpMessageHandler(() => new RateLimitHandler());
+
+        builder.AddStandardResilienceHandler(o =>
+        {
+            o.TotalRequestTimeout.Timeout = timeout;
+            o.AttemptTimeout.Timeout = timeout / 2;
+            o.CircuitBreaker.SamplingDuration = timeout; // must be >= 2x attempt timeout
+            // 429s are left to RateLimitHandler (it honours Retry-After for every method) and don't trip the breaker.
+            o.Retry.ShouldHandle = args => ValueTask.FromResult(IsTransientNotRateLimited(args.Outcome));
+            o.CircuitBreaker.ShouldHandle = args => ValueTask.FromResult(IsTransientNotRateLimited(args.Outcome));
+            o.Retry.DisableForUnsafeHttpMethods();
+        });
+
+        return builder;
+    }
+
+    private static bool IsTransientNotRateLimited(Polly.Outcome<HttpResponseMessage> outcome) =>
+        outcome.Result?.StatusCode != HttpStatusCode.TooManyRequests && HttpClientResiliencePredicates.IsTransient(outcome);
+}

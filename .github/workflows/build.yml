@@ -40,28 +40,28 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
 
       - name: Build
-        run: dotnet build DevToolsMcp.slnx -c Release
+        run: dotnet build SimpleArchitectureMcp.slnx -c Release
 
       - name: Test
-        run: dotnet test --project tests/DevToolsMcp.Tests -c Release --no-build
+        run: dotnet test --project tests/SimpleArchitectureMcp.Tests -c Release --no-build
 
       # Single-file, self-contained Native AOT executable. Trim/AOT warnings are build errors.
       - name: Publish
-        run: dotnet publish src/DevToolsMcp.Server -c Release -r ${{ matrix.rid }} -o artifacts/publish/${{ matrix.rid }}
+        run: dotnet publish src/SimpleArchitectureMcp.Server -c Release -r ${{ matrix.rid }} -o artifacts/publish/${{ matrix.rid }}
 
       - name: Smoke test
         shell: bash
         run: |
-          bin=artifacts/publish/${{ matrix.rid }}/devtools-mcp
+          bin=artifacts/publish/${{ matrix.rid }}/simple-architecture-mcp
           [ -f "$bin.exe" ] && bin="$bin.exe"
           "$bin" & pid=$!
           for i in $(seq 1 50); do curl -fsS http://127.0.0.1:5180/health && break; sleep 0.2; done
           curl -fsS http://127.0.0.1:5180/health
           # A second start must detect the running instance and exit cleanly (not crash on the taken port).
-          DevToolsMcp__OpenBrowser=false "$bin"
+          SimpleArchitectureMcp__OpenBrowser=false "$bin"
           # --stdio answers MCP on stdout (logs on stderr) and keeps working while another instance holds the port.
           init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}'
-          { echo "$init"; sleep 3; } | DevToolsMcp__OpenBrowser=false "$bin" --stdio 2>/dev/null | grep -m1 '"serverInfo":{"name":"devtools-mcp"'
+          { echo "$init"; sleep 3; } | SimpleArchitectureMcp__OpenBrowser=false "$bin" --stdio 2>/dev/null | grep -m1 '"serverInfo":{"name":"simple-architecture-mcp"'
           kill $pid
 
       - name: Package
@@ -69,16 +69,16 @@ jobs:
         run: |
           mkdir -p dist
           cd artifacts/publish/${{ matrix.rid }}
-          # Pick names by OS: Git Bash on Windows resolves "devtools-mcp" to the .exe, so probing files is unreliable.
+          # Pick names by OS: Git Bash on Windows resolves "simple-architecture-mcp" to the .exe, so probing files is unreliable.
           if [ "${{ runner.os }}" = "Windows" ]; then
-            7z a "$GITHUB_WORKSPACE/dist/devtools-mcp-${{ matrix.rid }}.zip" devtools-mcp.exe appsettings.json
+            7z a "$GITHUB_WORKSPACE/dist/simple-architecture-mcp-${{ matrix.rid }}.zip" simple-architecture-mcp.exe appsettings.json
           else
-            tar -czf "$GITHUB_WORKSPACE/dist/devtools-mcp-${{ matrix.rid }}.tar.gz" devtools-mcp appsettings.json
+            tar -czf "$GITHUB_WORKSPACE/dist/simple-architecture-mcp-${{ matrix.rid }}.tar.gz" simple-architecture-mcp appsettings.json
           fi
 
       - uses: actions/upload-artifact@v5
         with:
-          name: devtools-mcp-${{ matrix.rid }}
+          name: simple-architecture-mcp-${{ matrix.rid }}
           path: dist/*
           if-no-files-found: error
 
@@ -112,7 +112,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: devtools-mcp ${{ steps.meta.outputs.tag }}
+          name: simple-architecture-mcp ${{ steps.meta.outputs.tag }}
           target_commitish: ${{ github.sha }}
           prerelease: ${{ steps.meta.outputs.prerelease }}
           generate_release_notes: true

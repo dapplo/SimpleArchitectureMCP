@@ -1,5 +1,5 @@
 {
   "appHost": {
-    "path": "src/DevToolsMcp.AppHost/DevToolsMcp.AppHost.csproj"
+    "path": "src/SimpleArchitectureMcp.AppHost/SimpleArchitectureMcp.AppHost.csproj"
   }
 }

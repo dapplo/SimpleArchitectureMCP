@@ -1,0 +1,91 @@
+using System.Runtime.InteropServices;
+
+var builder = DistributedApplication.CreateBuilder(args);
+
+// Integration parameters. Every provider follows the same <provider>-url / -email / -token pattern, mapped to
+// <Provider>__BaseUrl / __Email / __ApiToken. Add a provider by adding one more Provider(...) line.
+Provider[] providers =
+[
+    Provider.Create(builder, "confluence", "Confluence", withDeploymentType: true),
+    Provider.Create(builder, "jira", "Jira", withDeploymentType: true, optional: true),
+    Provider.Create(builder, "github", "GitHub", withEmail: false, optional: true),
+];
+
+// Archi (ArchiMate diagrams) needs a local path, not a URL/token pair.
+var archiPath = builder.AddParameter("archi-path").AsOptional().WithDescription("Path to the Archi executable (Archi.exe, Archi or Archi.app)");
+
+// Prefer the published Native AOT single-file binary (sub-50 ms start); fall back to the project during development.
+// Publish it with:  dotnet publish src/SimpleArchitectureMcp.Server -c Release -r <rid> -o artifacts/publish/<rid>
+var binary = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "artifacts", "publish",
+    RuntimeInformation.RuntimeIdentifier, OperatingSystem.IsWindows() ? "simple-architecture-mcp.exe" : "simple-architecture-mcp"));
+
+if (File.Exists(binary))
+{
+    builder.AddExecutable("simple-architecture-mcp", binary, Path.GetDirectoryName(binary)!)
+        .WithOtlpExporter()
+        .ConfigureMcpServer(providers)
+        .WithEnvironment("Archi__ExecutablePath", archiPath);
+}
+else
+{
+    builder.AddDotnetProject("simple-architecture-mcp", Path.Combine("..", "SimpleArchitectureMcp.Server", "SimpleArchitectureMcp.Server.csproj"))
+        .ConfigureMcpServer(providers)
+        .WithEnvironment("Archi__ExecutablePath", archiPath);
+}
+
+builder.Build().Run();
+
+internal sealed record Provider(
+    string Section,
+    IResourceBuilder<ParameterResource> Url,
+    IResourceBuilder<ParameterResource>? Email,
+    IResourceBuilder<ParameterResource> Token,
+    IResourceBuilder<ParameterResource>? DeploymentType)
+{
+    public static Provider Create(IDistributedApplicationBuilder builder, string prefix, string section, bool withDeploymentType = false,
+        bool withEmail = true, bool optional = false) => new(
+        section,
+        Optional(builder.AddParameter($"{prefix}-url").WithDescription($"{section} base URL"), optional),
+        withEmail ? builder.AddParameter($"{prefix}-email").AsOptional().WithDescription($"{section} account email (Cloud only)") : null,
+        Optional(builder.AddParameter($"{prefix}-token", secret: true).WithDescription($"{section} API token / personal access token"), optional),
+        withDeploymentType ? builder.AddParameter($"{prefix}-deployment", "Auto").WithDescription("Auto, Cloud or DataCenter") : null);
+
+    // Optional providers don't block startup; unset values leave the variable unset, so the settings page still works.
+    private static IResourceBuilder<ParameterResource> Optional(IResourceBuilder<ParameterResource> p, bool optional) =>
+        optional ? p.AsOptional() : p;
+}
+
+internal static class McpServerResourceExtensions
+{
+    public static IResourceBuilder<T> ConfigureMcpServer<T>(this IResourceBuilder<T> resource, IEnumerable<Provider> providers)
+        where T : IResourceWithEnvironment, IResourceWithEndpoints
+    {
+        // Aspire's proxy listens on localhost:5180 and forwards to the target port it passes in PORT.
+        resource
+            .WithHttpEndpoint(port: McpPort, env: "PORT", name: "http")
+            .WithMcpServer(path: "/mcp", endpointName: "http")
+            .WithHttpHealthCheck("/health")
+            .WithUrlForEndpoint("http", u => u.DisplayText = "Settings")
+            .WithEnvironment("SimpleArchitectureMcp__OpenBrowser", "false"); // the dashboard links to the settings page instead
+
+        foreach (var p in providers)
+        {
+            resource
+                .WithEnvironment($"{p.Section}__BaseUrl", p.Url)
+                .WithEnvironment($"{p.Section}__ApiToken", p.Token);
+            if (p.Email is not null)
+            {
+                resource.WithEnvironment($"{p.Section}__Email", p.Email);
+            }
+
+            if (p.DeploymentType is not null)
+            {
+                resource.WithEnvironment($"{p.Section}__DeploymentType", p.DeploymentType);
+            }
+        }
+
+        return resource;
+    }
+
+    private const int McpPort = 5180;
+}

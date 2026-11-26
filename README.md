@@ -1,4 +1,4 @@
-# SimpleArchitectureMCP: devtools-mcp
+# SimpleArchitectureMCP
 
 A lean, locally running [Model Context Protocol](https://modelcontextprotocol.io) server for developer tools, built to keep LLM token usage low.
 
@@ -34,17 +34,17 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 | `confluence_append_to_page` | Adds content without the model re-sending the whole page |
 | Automatic version handling | No failed calls and retries for version conflicts |
 | One short error sentence per failure | Timeouts, unreachable hosts, login pages instead of JSON and API errors all say what to do next; no stack traces |
-| `devtools.mcp.tool.output.size` metric | See exactly how many characters each tool returns |
+| `simple_architecture_mcp.tool.output.size` metric | See exactly how many characters each tool returns |
 
 ## Quick start (no SDK needed)
 
 1. Download the archive for your OS from the latest [release](../../releases) and extract it.
-2. Double-click `devtools-mcp` (`devtools-mcp.exe` on Windows). A console window shows the server log.
+2. Double-click `simple-architecture-mcp` (`simple-architecture-mcp.exe` on Windows). A console window shows the server log.
 3. On first start the settings page opens in your browser (`http://localhost:5180/`). Fill in the modules you use (Confluence and Jira: base URL, email for Cloud, API token; GitHub: a personal access token, plus the URL only for GitHub Enterprise), then **Save**. The page tests the connection, and that module's tools become available immediately.
-4. Point your MCP client at `http://localhost:5180/mcp`, or let the client start `devtools-mcp --stdio` itself. [docs/clients.md](docs/clients.md) has the setup for VS Code / GitHub Copilot, Claude Code, Claude Desktop, Cursor, Windsurf, JetBrains and Codex. If the client was already connected, reload its MCP server so it fetches the new tool list.
+4. Point your MCP client at `http://localhost:5180/mcp`, or let the client start `simple-architecture-mcp --stdio` itself. [docs/clients.md](docs/clients.md) has the setup for VS Code / GitHub Copilot, Claude Code, Claude Desktop, Cursor, Windsurf, JetBrains and Codex. If the client was already connected, reload its MCP server so it fetches the new tool list.
 5. Ask away: [docs/examples.md](docs/examples.md) has example prompts and workflows across Confluence, Jira and GitHub.
 
-Settings are stored per user in `%APPDATA%\devtools-mcp\settings.json` (Windows) or `~/.config/devtools-mcp/settings.json` (Linux/macOS), readable only by you on Linux/macOS. Environment variables and `appsettings.json` work too; environment variables win over the settings page.
+Settings are stored per user in `%APPDATA%\simple-architecture-mcp\settings.json` (Windows) or `~/.config/simple-architecture-mcp/settings.json` (Linux/macOS), readable only by you on Linux/macOS. Environment variables and `appsettings.json` work too; environment variables win over the settings page.
 
 ### Convert & download
 
@@ -62,9 +62,9 @@ Uploads (up to 25 MB) go to a temporary folder that is deleted after the convers
 ## Repository layout
 
 ```
-DevToolsMcp.slnx
+SimpleArchitectureMcp.slnx
 src/
-  DevToolsMcp.Server/            Native AOT MCP server (assembly: devtools-mcp)
+  SimpleArchitectureMcp.Server/            Native AOT MCP server (assembly: simple-architecture-mcp)
     Program.cs                   Composition root: JSON contexts, MCP server, modules
     Core/
       Http/                      Named HttpClient per module: auth handler, payload metrics, rate-limit waits, resilience
@@ -109,8 +109,8 @@ src/
       ArchiService.cs            Render via HTML report or jArchi script, collect PNGs
       DrawioConverter.cs         Exchange XML -> draw.io file (ArchiMate 3 shapes)
       ArchiTools.cs              The 3 MCP tools
-  DevToolsMcp.AppHost/           Aspire 17 AppHost
-tests/DevToolsMcp.Tests/         xUnit v3 tests, grouped by slice
+  SimpleArchitectureMcp.AppHost/           Aspire 17 AppHost
+tests/SimpleArchitectureMcp.Tests/         xUnit v3 tests, grouped by slice
 .vscode/mcp.json                 VS Code / GitHub Copilot client config
 ```
 
@@ -129,7 +129,7 @@ tests/DevToolsMcp.Tests/         xUnit v3 tests, grouped by slice
 
 Plain-text queries become `type = page AND text ~ "..."`; queries that already contain CQL operators pass through unchanged. `space_key` is validated and AND-ed in front, and any `ORDER BY` stays at the end.
 
-`confluence_add_drawio` stores the diagram the way the draw.io app for Confluence does: the `.drawio` XML as a page attachment named after the diagram (no extension), the optional PNG as `<name>.png`, and a `drawio` macro (`diagramName`, `revision` = attachment version) appended to the page. Running it again with the same name uploads a new attachment version and only bumps the existing macro's revision, so the diagram updates in place. The tool is only listed when the draw.io app is available (see `Confluence:DiagramApps` below); the upload uses the v1 `content/{id}/child/attachment` endpoint on both Cloud and Data Center. The file must be an ordinary local file (same hidden-folder guard as Jira attachments); devtools-mcp's own output folder `%TEMP%/devtools-mcp`, where the Archi tools write by default, is always allowed.
+`confluence_add_drawio` stores the diagram the way the draw.io app for Confluence does: the `.drawio` XML as a page attachment named after the diagram (no extension), the optional PNG as `<name>.png`, and a `drawio` macro (`diagramName`, `revision` = attachment version) appended to the page. Running it again with the same name uploads a new attachment version and only bumps the existing macro's revision, so the diagram updates in place. The tool is only listed when the draw.io app is available (see `Confluence:DiagramApps` below); the upload uses the v1 `content/{id}/child/attachment` endpoint on both Cloud and Data Center. The file must be an ordinary local file (same hidden-folder guard as Jira attachments); simple-architecture-mcp's own output folder `%TEMP%/simple-architecture-mcp`, where the Archi tools write by default, is always allowed.
 
 Updates read the current version first and write `version + 1`. If someone else saves in between (HTTP 409), the server re-reads the version and retries once. Appends work on the raw storage body, so existing macros are never converted or lost.
 
@@ -175,7 +175,7 @@ Basic issue work with your own Jira permissions. There are no admin tools (no pr
 * **Labels** are added and removed individually, so existing labels are never overwritten.
 * **Plain-text search** becomes `text ~ "..." ORDER BY updated DESC`; a bare key like `abc-12` becomes `key = ABC-12`. Cloud uses the enhanced `/rest/api/2/search/jql` endpoint; Data Center uses `/rest/api/2/search`.
 * An unknown `issue_type` on create returns the project's valid issue types in the error.
-* **Attachments** are read from the local disk with your permissions, up to 100 MB. Files in hidden files or folders (`~/.ssh`, `~/.aws`, `.env`, `~/.config/devtools-mcp`, …) or in Windows `AppData` are refused, also through symbolic links, so a prompt-injected issue cannot talk the model into uploading credentials.
+* **Attachments** are read from the local disk with your permissions, up to 100 MB. Files in hidden files or folders (`~/.ssh`, `~/.aws`, `.env`, `~/.config/simple-architecture-mcp`, …) or in Windows `AppData` are refused, also through symbolic links, so a prompt-injected issue cannot talk the model into uploading credentials.
 
 Jira configuration mirrors Confluence: `Jira:BaseUrl`, `Jira:Email` (Cloud only), `Jira:ApiToken` and `Jira:DeploymentType` (`Auto` picks Cloud for `*.atlassian.net` or when an email is set). On Cloud, any path in the URL (`/jira/software/...`) is ignored; on Data Center the context path (`https://host/jira`) is kept.
 
@@ -282,13 +282,13 @@ Renders ArchiMate views to PNG with your local [Archi](https://www.archimatetool
 
 **Renderer.** `HtmlReport` (default) works with plain Archi: it imports the model, creates Archi's HTML report in a temporary folder and takes the view PNGs from it (100% scale). `jArchi` runs a generated script with the [jArchi scripting plugin](https://www.archimatetool.com/plugins/) instead: it renders only the requested views, faster, and honours `Archi:Scale` and `Archi:Margin`. **Test connection** on the settings page tells you whether jArchi is installed.
 
-**Headless Linux.** Archi is an SWT application and needs a display even on the command line. Without `DISPLAY`/`WAYLAND_DISPLAY`, devtools-mcp runs it through `xvfb-run -a` (install `xvfb`). One Archi process runs at a time; a run usually takes a few seconds for the JVM start.
+**Headless Linux.** Archi is an SWT application and needs a display even on the command line. Without `DISPLAY`/`WAYLAND_DISPLAY`, simple-architecture-mcp runs it through `xvfb-run -a` (install `xvfb`). One Archi process runs at a time; a run usually takes a few seconds for the JVM start.
 
 | Key (env var) | Meaning |
 | --- | --- |
 | `Archi:ExecutablePath` (`Archi__ExecutablePath`) | Required to enable the module: `Archi.exe` (Windows), the `Archi` launcher (Linux), `Archi.app` (macOS) or the folder that contains it |
 | `Archi:Renderer` | `HtmlReport` (default) or `jArchi` |
-| `Archi:OutputDirectory` | Where PNG and `.xml` files go when a call names no path (default `<temp>/devtools-mcp/archi`) |
+| `Archi:OutputDirectory` | Where PNG and `.xml` files go when a call names no path (default `<temp>/simple-architecture-mcp/archi`) |
 | `Archi:Scale`, `Archi:Margin` | jArchi only: scale in percent (50–400, default 100) and border in pixels (default 10) |
 | `Archi:TimeoutSeconds` | Per Archi run (default 120) |
 
@@ -306,12 +306,14 @@ The settings page shows the first three; scale, margin and timeout are set in `a
 | `Confluence:TimeoutSeconds` | Total request timeout (default 30; read at start-up, so restart after changing it) |
 | `Jira:BaseUrl`, `Jira:ApiToken`, `Jira:Email`, `Jira:DeploymentType`, `Jira:TimeoutSeconds` (`Jira__…`) | Same meaning, for Jira |
 | `--stdio` (command-line switch) | MCP over stdin/stdout for clients that start the server themselves. The settings page and `/health` stay on HTTP; logs go to stderr. If the port is taken, the instance keeps serving stdio and watches `settings.json` for changes made on the other instance's page |
-| `DevToolsMcp:Port`, else `PORT`, else 5180 | Listen port |
-| `DevToolsMcp:OpenBrowser` | `false` stops the settings page from opening on first start |
-| `DevToolsMcp:SettingsFile` | Override the per-user settings file path |
-| `DevToolsMcp:AllowRemote` | `true` binds all interfaces and requires `McpAuth:ApiKey` (the server refuses to start without one). Default: loopback only (`127.0.0.1` and `::1`) |
+| `SimpleArchitectureMcp:Port`, else `PORT`, else 5180 | Listen port |
+| `SimpleArchitectureMcp:OpenBrowser` | `false` stops the settings page from opening on first start |
+| `SimpleArchitectureMcp:SettingsFile` | Override the per-user settings file path |
+| `SimpleArchitectureMcp:AllowRemote` | `true` binds all interfaces and requires `McpAuth:ApiKey` (the server refuses to start without one). Default: loopback only (`127.0.0.1` and `::1`) |
 | `McpAuth:ApiKey` (`McpAuth__ApiKey`) | If set, `/mcp` requires `Authorization: Bearer <key>` or `X-API-Key` (`/health` stays open) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Enables OTLP export (Aspire sets it automatically) |
+
+**Upgrading from devtools-mcp.** The server used to be called `devtools-mcp`. On the first start the new `simple-architecture-mcp` copies the old settings folder (`%APPDATA%/devtools-mcp` or `~/.config/devtools-mcp`) to `simple-architecture-mcp` next to it, so your URLs and tokens carry over; the old folder is left in place. Old `DevToolsMcp:*` keys (`DevToolsMcp__Port` and so on) still work where the new `SimpleArchitectureMcp:*` key is unset, except `AllowRemote`, which `appsettings.json` now sets under the new name (re-set it as `SimpleArchitectureMcp__AllowRemote`). Point your MCP client at the new executable name.
 
 **Diagram app detection.** With `auto`, the first `tools/list` (or **Test connection**) renders each app's macro through the v1 `contentbody/convert/view` endpoint, which every user may call on Cloud and Data Center (the plugin APIs are admin-only). A macro that renders like a made-up control macro, or as "Unknown macro", is missing. The result is cached until the settings change; if detection fails (offline, timeout) the tools stay listed and the real call reports the problem. Macro names probed: `drawio`; `plantuml`, `plantumlcloud`; `mermaid`, `mermaid-cloud`, `mermaid-macro`. **Test connection** shows what was found.
 
@@ -322,24 +324,24 @@ The server binds to loopback only by default, so the unauthenticated endpoint is
 Requires the .NET 11 SDK (`global.json`). Native AOT also needs the platform toolchain (clang + zlib on Linux, Xcode command-line tools on macOS, the "Desktop development with C++" workload on Windows).
 
 ```bash
-dotnet build DevToolsMcp.slnx
-dotnet test --project tests/DevToolsMcp.Tests     # Microsoft.Testing.Platform runner (see global.json)
+dotnet build SimpleArchitectureMcp.slnx
+dotnet test --project tests/SimpleArchitectureMcp.Tests     # Microsoft.Testing.Platform runner (see global.json)
 
 # Single-file, self-contained Native AOT executable. Publish into artifacts/publish/<rid> so the AppHost finds it:
-dotnet publish src/DevToolsMcp.Server -c Release -r linux-x64 -o artifacts/publish/linux-x64
-dotnet publish src/DevToolsMcp.Server -c Release -r win-x64   -o artifacts/publish/win-x64
-dotnet publish src/DevToolsMcp.Server -c Release -r osx-arm64 -o artifacts/publish/osx-arm64
+dotnet publish src/SimpleArchitectureMcp.Server -c Release -r linux-x64 -o artifacts/publish/linux-x64
+dotnet publish src/SimpleArchitectureMcp.Server -c Release -r win-x64   -o artifacts/publish/win-x64
+dotnet publish src/SimpleArchitectureMcp.Server -c Release -r osx-arm64 -o artifacts/publish/osx-arm64
 ```
 
 Native AOT cannot cross-compile between operating systems, so publish each RID on its own OS. Trim/AOT warnings (`IL2026`, `IL3050`, …) are configured as errors, so any reflection regression fails the build.
 
-CI (`.github/workflows/build.yml`) builds, tests, publishes and smoke-tests the AOT binary on `linux-x64`, `linux-arm64`, `win-x64`, `osx-arm64` and `osx-x64`. Each run uploads `devtools-mcp-<rid>.tar.gz` / `.zip` as an artifact. Every push to `main` also publishes them as an automatic GitHub **pre-release** (`v0.1.<run>-preview`). Pushing a `v*` tag publishes a regular release.
+CI (`.github/workflows/build.yml`) builds, tests, publishes and smoke-tests the AOT binary on `linux-x64`, `linux-arm64`, `win-x64`, `osx-arm64` and `osx-x64`. Each run uploads `simple-architecture-mcp-<rid>.tar.gz` / `.zip` as an artifact. Every push to `main` also publishes them as an automatic GitHub **pre-release** (`v0.1.<run>-preview`). Pushing a `v*` tag publishes a regular release.
 
 Run the binary directly:
 
 ```bash
 Confluence__BaseUrl=https://acme.atlassian.net Confluence__Email=me@acme.com Confluence__ApiToken=... \
-  ./artifacts/publish/linux-x64/devtools-mcp
+  ./artifacts/publish/linux-x64/simple-architecture-mcp
 curl http://localhost:5180/health    # {"status":"ok","modules":["confluence:Cloud"]}
 ```
 
@@ -349,17 +351,17 @@ Aspire is not needed to use the server. It is useful while developing modules: t
 
 ```bash
 dotnet tool install -g Aspire.Cli    # Aspire 17 runs AppHosts through the CLI bundle
-aspire run --project src/DevToolsMcp.AppHost
+aspire run --project src/SimpleArchitectureMcp.AppHost
 ```
 
 The AppHost:
 
-* defines the parameters `confluence-url`, `confluence-email` (optional), `confluence-token` (secret) and `confluence-deployment`, and injects them as `Confluence__BaseUrl`, `Confluence__Email`, `Confluence__ApiToken` and `Confluence__DeploymentType`. The `jira-*` parameters work the same way for `Jira__*`, but are optional so they never block startup. Fill them in when the dashboard prompts, or with `dotnet user-secrets set Parameters:confluence-token … --project src/DevToolsMcp.AppHost`;
+* defines the parameters `confluence-url`, `confluence-email` (optional), `confluence-token` (secret) and `confluence-deployment`, and injects them as `Confluence__BaseUrl`, `Confluence__Email`, `Confluence__ApiToken` and `Confluence__DeploymentType`. The `jira-*` parameters work the same way for `Jira__*`, but are optional so they never block startup. Fill them in when the dashboard prompts, or with `dotnet user-secrets set Parameters:confluence-token … --project src/SimpleArchitectureMcp.AppHost`;
 * defines the optional parameters `github-url` and `github-token` (secret), injected as `GitHub__BaseUrl` and `GitHub__ApiToken`. They never block startup; leave them empty to configure GitHub on the settings page instead. The optional `archi-path` becomes `Archi__ExecutablePath`;
-* launches the **published AOT binary** through `AddExecutable` when `artifacts/publish/<current-rid>/devtools-mcp` exists. Otherwise it falls back to the project (`AddDotnetProject`);
-* exposes `http://localhost:5180` (Aspire proxy → `PORT`), marks it with `.WithMcpServer(path: "/mcp")`, adds a `/health` check, and wires OTLP so tool calls, downstream Confluence calls, latencies and payload sizes (`devtools.http.client.response.body.size`) show up in the dashboard.
+* launches the **published AOT binary** through `AddExecutable` when `artifacts/publish/<current-rid>/simple-architecture-mcp` exists. Otherwise it falls back to the project (`AddDotnetProject`);
+* exposes `http://localhost:5180` (Aspire proxy → `PORT`), marks it with `.WithMcpServer(path: "/mcp")`, adds a `/health` check, and wires OTLP so tool calls, downstream Confluence calls, latencies and payload sizes (`simple_architecture_mcp.http.client.response.body.size`) show up in the dashboard.
 
-To check that Aspire uses the AOT binary, publish it first and run `aspire run`. The `devtools-mcp` resource then shows `artifacts/publish/<rid>/devtools-mcp` as its command, and `/health` answers through port 5180.
+To check that Aspire uses the AOT binary, publish it first and run `aspire run`. The `simple-architecture-mcp` resource then shows `artifacts/publish/<rid>/simple-architecture-mcp` as its command, and `/health` answers through port 5180.
 
 ## Use from VS Code / GitHub Copilot
 
@@ -370,7 +372,7 @@ Other clients and the API-key variant: see [docs/clients.md](docs/clients.md).
 ```jsonc
 {
   "servers": {
-    "devtools-mcp": { "type": "http", "url": "http://localhost:5180/mcp" }
+    "simple-architecture-mcp": { "type": "http", "url": "http://localhost:5180/mcp" }
   }
 }
 ```
