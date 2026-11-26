@@ -122,7 +122,7 @@ public class ConfluenceServiceTests
     [Fact]
     public async Task Add_drawio_uploads_attachments_and_appends_the_macro()
     {
-        var dir = Directory.CreateTempSubdirectory("drawio-").FullName;
+        var dir = NewDir();
         try
         {
             var file = Path.Combine(dir, "Web shop.drawio");
@@ -151,7 +151,7 @@ public class ConfluenceServiceTests
     [Fact]
     public async Task Add_drawio_again_only_bumps_the_revision()
     {
-        var dir = Directory.CreateTempSubdirectory("drawio-").FullName;
+        var dir = NewDir();
         try
         {
             var file = Path.Combine(dir, "a.drawio");
@@ -179,7 +179,9 @@ public class ConfluenceServiceTests
     public async Task Add_drawio_validates_inputs()
     {
         var service = new ConfluenceService(() => new FakeAdapter());
-        var file = Path.GetTempFileName();
+        var dir = NewDir();
+        var file = Path.Combine(dir, "x.tmp");
+        File.WriteAllText(file, "x");
         try
         {
             Assert.Contains("expected a .drawio", (await Assert.ThrowsAsync<ArgumentException>(() => service.AddDrawioAsync("7", file, null, null, null, Ct))).Message);
@@ -188,7 +190,11 @@ public class ConfluenceServiceTests
         }
         finally
         {
-            File.Delete(file);
+            Directory.Delete(dir, recursive: true);
         }
     }
+
+    // devtools-mcp's own output folder is allowed on every OS (on Windows the temp folder lies under AppData).
+    private static string NewDir() =>
+        Directory.CreateDirectory(Path.Combine(DevToolsMcp.Server.Core.Security.LocalFiles.OwnOutputRoot, "test-" + Guid.NewGuid().ToString("N")[..8])).FullName;
 }

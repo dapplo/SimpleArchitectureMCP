@@ -4,6 +4,12 @@ namespace DevToolsMcp.Server.Core.Security;
 public static class LocalFiles
 {
     /// <summary>
+    /// devtools-mcp's own scratch/output folder (<c>%TEMP%/devtools-mcp</c>, e.g. Archi PNG and .drawio files).
+    /// Always allowed, although on Windows it lies under AppData\Local\Temp.
+    /// </summary>
+    public static string OwnOutputRoot { get; } = Path.Combine(Path.GetTempPath(), "devtools-mcp");
+
+    /// <summary>
     /// The server runs with the user's file permissions, so uploads are limited to ordinary files: nothing in a
     /// hidden file or folder (~/.ssh, ~/.aws, ~/.config/devtools-mcp, .env, ...) or in Windows AppData, also after
     /// following symbolic links. This keeps prompt-injected content from talking the model into uploading credentials.
@@ -28,8 +34,15 @@ public static class LocalFiles
         }
 
         var target = file.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? file.FullName;
+        var own = Path.TrimEndingDirectorySeparator(Path.GetFullPath(OwnOutputRoot)) + Path.DirectorySeparatorChar;
+        var comparison = OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
         foreach (var candidate in new[] { file.FullName, Path.GetFullPath(target) })
         {
+            if (candidate.StartsWith(own, comparison))
+            {
+                continue;
+            }
+
             var segments = candidate.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
             if (segments.Any(s => s.StartsWith('.') || s.Equals("AppData", StringComparison.OrdinalIgnoreCase)))
             {
