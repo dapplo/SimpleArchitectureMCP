@@ -14,7 +14,7 @@ public sealed partial class ArchiService
     public async Task<ConversionFile> DownloadPngAsync(string model, CancellationToken cancellationToken)
     {
         var input = ValidateModelPath(model);
-        var target = Path.Combine(Path.GetTempPath(), "devtools-mcp", "archi-png-" + Guid.NewGuid().ToString("N")[..12]);
+        var target = Path.Combine(Core.Security.OwnTempFolder.Path, "archi-png-" + Guid.NewGuid().ToString("N")[..12]);
         try
         {
             var rendered = await RenderToAsync(input, null, target, cancellationToken).ConfigureAwait(false);

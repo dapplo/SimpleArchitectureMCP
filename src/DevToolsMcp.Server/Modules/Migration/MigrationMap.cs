@@ -17,6 +17,12 @@ public sealed class MigrationRecord
     /// <summary>How many source comments have been copied.</summary>
     public int Comments { get; set; }
 
+    /// <summary>
+    /// Set just before the target issue is created, cleared once it is recorded. Still set on a later run means the
+    /// earlier one stopped in between, so the target is searched for the issue before creating another.
+    /// </summary>
+    public DateTimeOffset? Creating { get; set; }
+
     public bool Attachments { get; set; }
     public bool Closed { get; set; }
     public bool Done { get; set; }

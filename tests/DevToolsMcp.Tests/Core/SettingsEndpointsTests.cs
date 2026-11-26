@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using DevToolsMcp.Server.Core.Settings;
 using Microsoft.AspNetCore.Http;
 
@@ -62,6 +63,54 @@ public class SettingsEndpointsTests
         finally
         {
             Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(null, null, false)]
+    [InlineData("true", null, true)]       // every machine on the network could use the tokens
+    [InlineData("true", "  ", true)]
+    [InlineData("true", "k3y", false)]
+    [InlineData("false", null, false)]
+    public void Remote_binding_needs_an_api_key(string? allowRemote, string? apiKey, bool refused)
+    {
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["DevToolsMcp:AllowRemote"] = allowRemote,
+            ["McpAuth:ApiKey"] = apiKey,
+        }).Build();
+        Assert.Equal(refused, DevToolsMcp.Server.Core.Security.LocalHosting.StartupProblem(config) is not null);
+    }
+
+    [Fact]
+    public void Temp_folder_is_private_and_never_a_link()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = Directory.CreateTempSubdirectory("own-temp").FullName;
+        try
+        {
+            // Someone else's link where our folder should be: skipped for the per-user name.
+            var elsewhere = Directory.CreateDirectory(Path.Combine(root, "elsewhere")).FullName;
+            Directory.CreateSymbolicLink(Path.Combine(root, "devtools-mcp"), elsewhere);
+            Assert.False(DevToolsMcp.Server.Core.Security.OwnTempFolder.TryClaim(Path.Combine(root, "devtools-mcp")));
+
+            var claimed = DevToolsMcp.Server.Core.Security.OwnTempFolder.Claim(root, "jane doe");
+            Assert.Equal(Path.Combine(root, "devtools-mcp-jane_doe"), claimed);
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(claimed));
+
+            // A folder left by an older version with 0755 is tightened.
+            var old = Directory.CreateDirectory(Path.Combine(root, "old")).FullName;
+            File.SetUnixFileMode(old, (UnixFileMode)0b111_101_101);
+            Assert.True(DevToolsMcp.Server.Core.Security.OwnTempFolder.TryClaim(old));
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(old));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
         }
     }
 }

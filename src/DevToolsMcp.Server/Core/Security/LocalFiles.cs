@@ -7,7 +7,7 @@ public static class LocalFiles
     /// devtools-mcp's own scratch/output folder (<c>%TEMP%/devtools-mcp</c>, e.g. Archi PNG and .drawio files).
     /// Always allowed, although on Windows it lies under AppData\Local\Temp.
     /// </summary>
-    public static string OwnOutputRoot { get; } = Path.Combine(Path.GetTempPath(), "devtools-mcp");
+    public static string OwnOutputRoot => OwnTempFolder.Path;
 
     /// <summary>
     /// The server runs with the user's file permissions, so uploads are limited to ordinary files: nothing in a

@@ -110,6 +110,71 @@ public sealed class MigrationServiceTests : IDisposable
         Assert.Contains("\"done\": true", File.ReadAllText(MapFile));
     }
 
+    private static readonly DateTimeOffset Started = new(2026, 11, 26, 10, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task Issue_created_by_an_interrupted_run_is_adopted_not_created_again()
+    {
+        var (svc, jira, gh) = Create();
+        JiraSource(jira);
+        GitHubTarget(gh);
+        gh.On("GET", "/user", """{"login":"me"}""");
+        gh.On("GET", "/repos/o/r/issues?creator=me&state=all&sort=created&direction=desc&per_page=100&since=2026-11-26T09%3A59%3A00Z", """
+            [{"id":901,"number":46,"body":"> Migrated from Jira [OPS-8](https://acme.atlassian.net/browse/OPS-8)"},
+             {"id":900,"number":45,"html_url":"https://github.com/o/r/issues/45","body":"> Migrated from Jira [OPS-7](https://acme.atlassian.net/browse/OPS-7) · Bug"}]
+            """);
+        File.WriteAllText(MapFile, """
+            {"issues":{"jira:acme.atlassian.net/OPS-7 -> github:github.com/o/r":{"creating":"2026-11-26T10:00:00+00:00"}}}
+            """);
+
+        var result = await svc.MigrateAsync("o/r", ["OPS-7"], null, null, 10, false, Ct);
+
+        Assert.StartsWith("OPS-7 → o/r#45 | 2 comments", result);
+        Assert.DoesNotContain(gh.Requests, r => r is { Method.Method: "POST", PathAndQuery: "/repos/o/r/issues" });
+        Assert.Equal(2, gh.Requests.Count(r => r.PathAndQuery == "/repos/o/r/issues/45/comments"));
+        Assert.DoesNotContain("creating", File.ReadAllText(MapFile));
+    }
+
+    [Fact]
+    public async Task Creation_is_marked_before_the_create_request()
+    {
+        var (svc, jira, gh) = Create();
+        svc.Now = () => Started;
+        JiraSource(jira);
+        GitHubTarget(gh);
+        gh.On("POST", "/repos/o/r/issues", """{"message":"Server Error"}""", HttpStatusCode.InternalServerError);
+
+        var result = await svc.MigrateAsync("o/r", ["OPS-7"], null, null, 10, false, Ct);
+
+        Assert.StartsWith("OPS-7 ✗", result);
+        Assert.Contains("\"creating\": \"2026-11-26T10:00:00+00:00\"", File.ReadAllText(MapFile)); // a re-run looks before creating
+    }
+
+    [Fact]
+    public async Task GitHub_to_Jira_adopts_the_issue_of_an_interrupted_run()
+    {
+        var (svc, jira, gh) = Create();
+        svc.Now = () => Started.AddMinutes(30);
+        gh.On("GET", "/repos/o/r/issues/5", """
+            {"id":5000,"number":5,"title":"Crash","state":"open","body":"x","user":{"login":"bob"},"comments":0,"html_url":"https://github.com/o/r/issues/5"}
+            """);
+        gh.On("GET", "/repos/o/r/issues/5/sub_issues?per_page=100", "[]");
+        var jql = "project = OPS AND creator = currentUser() AND created >= -32m ORDER BY created ASC";
+        jira.On("GET", $"/rest/api/2/search/jql?jql={Uri.EscapeDataString(jql)}&maxResults=50&fields=description", """
+            {"issues":[{"key":"OPS-10","fields":{"description":"> Migrated from GitHub [o/r#50|https://github.com/o/r/issues/50]"}},
+                       {"key":"OPS-11","fields":{"description":"> Migrated from GitHub [o/r#5|https://github.com/o/r/issues/5] · opened by"}}],"isLast":true}
+            """);
+        jira.On("GET", $"/rest/api/2/issue/OPS-11?fields={Fields}", """{"key":"OPS-11","fields":{}}""");
+        File.WriteAllText(MapFile, """
+            {"issues":{"github:github.com/o/r#5 -> jira:acme.atlassian.net/OPS":{"creating":"2026-11-26T10:00:00+00:00"}}}
+            """);
+
+        var result = await svc.MigrateAsync("OPS", ["#5"], null, null, 10, false, Ct);
+
+        Assert.StartsWith("o/r#5 → OPS-11", result);
+        Assert.DoesNotContain(jira.Requests, r => r is { Method.Method: "POST", PathAndQuery: "/rest/api/2/issue" });
+    }
+
     [Fact]
     public async Task Dry_run_writes_nothing()
     {

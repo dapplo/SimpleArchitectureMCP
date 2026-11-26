@@ -153,6 +153,37 @@ public sealed class ArchiServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Existing_files_of_other_programs_are_only_replaced_when_asked()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        File.WriteAllText(Path.Combine(_dir, "Archi"), "");
+        var (sp, _) = Build(new() { ["Archi:ExecutablePath"] = Path.Combine(_dir, "Archi"), ["Archi:OutputDirectory"] = Path.Combine(_dir, "out") });
+        var archi = sp.GetRequiredService<ArchiService>();
+        // Not the temp folder: on Windows that lives under AppData, which the output guard refuses.
+        var work = Directory.CreateDirectory(Path.Combine(AppContext.BaseDirectory, "archi-overwrite-" + Guid.NewGuid().ToString("N")[..8])).FullName;
+        var pom = Path.Combine(work, "pom.xml");
+        File.WriteAllText(pom, "<project/>");
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => archi.CreateModelAsync(ExchangeModelBuilderTests.Sample(), pom, ct));
+        Assert.Contains("overwrite=true", ex.Message);
+        Assert.Equal("<project/>", File.ReadAllText(pom));
+
+        // An exchange model may be regenerated in place; anything else only with overwrite.
+        var model = Path.Combine(work, "model.xml");
+        await archi.CreateModelAsync(ExchangeModelBuilderTests.Sample(), model, ct);
+        await archi.CreateModelAsync(ExchangeModelBuilderTests.Sample(), model, ct);
+        await archi.CreateModelAsync(ExchangeModelBuilderTests.Sample(), pom, overwrite: true, ct);
+        Assert.Contains("opengroup.org/xsd/archimate", File.ReadAllText(pom));
+
+        var notes = Path.Combine(work, "notes.drawio");
+        File.WriteAllText(notes, "my own notes");
+        await Assert.ThrowsAsync<ArgumentException>(() => archi.ToDrawioAsync(model, null, notes, ct));
+        File.WriteAllText(notes, "<mxfile/>");
+        await archi.ToDrawioAsync(model, null, notes, ct);
+        Directory.Delete(work, recursive: true);
+    }
+
+    [Fact]
     public async Task Settings_page_conversions_return_downloads_and_write_nothing_to_the_output_folder()
     {
         if (OperatingSystem.IsWindows())

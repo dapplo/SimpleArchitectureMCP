@@ -103,6 +103,12 @@ public sealed class GitHubApi(IHttpClientFactory httpClientFactory, GitHubOption
         return new GhDownload(data, response.Content.Headers.ContentType?.MediaType, name);
     }
 
+    /// <summary>Issues (and pull requests) by <paramref name="creator"/> updated since <paramref name="since"/>, newest first.</summary>
+    public Task<List<GhIssue>> ListIssuesByCreatorAsync(string repo, string creator, DateTimeOffset since, CancellationToken ct) =>
+        SendAsync(HttpMethod.Get, $"repos/{repo}/issues?creator={Uri.EscapeDataString(creator)}&state=all&sort=created&direction=desc&per_page=100"
+            + $"&since={Uri.EscapeDataString(since.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture))}",
+            null, GitHubJsonContext.Default.ListGhIssue, ct)!;
+
     public Task<GhIssue> GetIssueAsync(string repo, int number, CancellationToken ct) =>
         SendAsync(HttpMethod.Get, $"repos/{repo}/issues/{number}", null, GitHubJsonContext.Default.GhIssue, ct)!;
 

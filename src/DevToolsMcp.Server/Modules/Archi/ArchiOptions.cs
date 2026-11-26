@@ -36,7 +36,7 @@ public sealed class ArchiOptions
     public int MarginPixels => Clamp(Margin, 10, 0, 200);
 
     public string OutputPath => string.IsNullOrWhiteSpace(OutputDirectory)
-        ? Path.Combine(Path.GetTempPath(), "devtools-mcp", "archi")
+        ? Path.Combine(Core.Security.OwnTempFolder.Path, "archi")
         : Path.GetFullPath(ArchiPaths.ExpandHome(OutputDirectory.Trim()));
 
     public bool TryValidate(out string? executable, out string? reason)

@@ -34,8 +34,9 @@ public sealed class ConfluenceTools(ConfluenceService confluence)
         string page_id,
         [Description(".md file, or folder (file named after the title)")] string save_to,
         [Description("markdown or storage")] string format = "markdown",
+        [Description("Replace an existing file that is not an earlier export")] bool overwrite = false,
         CancellationToken cancellationToken = default) =>
-        Run("confluence_export_page", () => confluence.ExportPageAsync(page_id, save_to, format, cancellationToken));
+        Run("confluence_export_page", () => confluence.ExportPageAsync(page_id, save_to, format, overwrite, cancellationToken));
 
     [McpServerTool(Name = "confluence_get_page_children", ReadOnly = true, Idempotent = true)]
     [Description("List child pages as id | title.")]

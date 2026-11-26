@@ -154,8 +154,7 @@ public static class SettingsEndpoints
                 }
 
                 // Only the uploaded name's extension and a sanitized base name are kept; the folder is ours.
-                work = Path.Combine(Path.GetTempPath(), "devtools-mcp", "convert-" + Guid.NewGuid().ToString("N")[..12]);
-                Directory.CreateDirectory(work);
+                work = Security.OwnTempFolder.NewWorkFolder("convert-");
                 var fileName = Path.GetFileName(upload.FileName);
                 path = Path.Combine(work, Security.LocalSavePath.FileName(Path.GetFileNameWithoutExtension(fileName), Path.GetExtension(fileName).ToLowerInvariant()));
                 await using (var target = File.Create(path))
