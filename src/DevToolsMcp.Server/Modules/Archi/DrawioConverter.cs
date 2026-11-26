@@ -93,7 +93,12 @@ public static class DrawioConverter
         XDocument doc;
         try
         {
-            doc = XDocument.Parse(exchangeXml);
+            // No DTDs: an entity-expansion bomb in a model file must not eat memory, and nothing external is resolved.
+            using var reader = XmlReader.Create(new StringReader(exchangeXml), new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, IgnoreWhitespace = true,
+            });
+            doc = XDocument.Load(reader);
         }
         catch (XmlException ex)
         {

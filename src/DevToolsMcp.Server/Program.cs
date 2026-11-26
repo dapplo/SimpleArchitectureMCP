@@ -77,6 +77,7 @@ var registry = app.Services.GetRequiredService<ModuleRegistry>();
 var baseUrl = $"http://localhost:{port}/";
 var store = new SettingsStore(settingsFile, (IConfigurationRoot)app.Configuration);
 
+app.UseMcpOriginGuard();   // DNS rebinding / browser pages must not reach /mcp
 app.UseOptionalApiKey();
 app.MapGet("/health", (IServiceProvider sp) => new HealthResponse("ok", registry.ActiveModules(sp).ToList()));
 app.MapSettings(store, baseUrl + "mcp");

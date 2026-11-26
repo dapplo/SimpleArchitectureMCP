@@ -262,4 +262,21 @@ public sealed class ArchiServiceTests : IDisposable
         Assert.Equal(Path.Combine(trusted, "v.png"), ArchiPaths.ValidateOutput(Path.Combine(trusted, "v.png"), trusted, ".png"));
         Assert.Throws<ArgumentException>(() => ArchiService.ValidateModelPath(Path.Combine(_dir, "x.txt")));
     }
+
+    [Fact]
+    public void View_ids_from_the_model_cannot_point_outside_the_work_folder()
+    {
+        var work = Path.Combine(_dir, "work");
+        Directory.CreateDirectory(Path.Combine(work, "images"));
+        File.WriteAllBytes(Path.Combine(work, "images", "id-1.png"), Convert.FromBase64String(Png));
+        var secret = Path.Combine(_dir, "private");
+        File.WriteAllBytes(secret + ".png", Convert.FromBase64String(Png));
+
+        Assert.Equal(Path.Combine(work, "images", "id-1.png"), ArchiService.FindImage(work, "id-1"));
+        Assert.Null(ArchiService.FindImage(work, secret));                 // absolute: Path.Combine would drop the work folder
+        Assert.Null(ArchiService.FindImage(work, "../../private"));
+        Assert.Null(ArchiService.FindImage(work, ".."));
+        Assert.Null(ArchiService.FindImage(work, "*"));
+        Assert.Contains("never a path", ArchiService.JArchiScript("/tmp/x", [], 100, 10));
+    }
 }

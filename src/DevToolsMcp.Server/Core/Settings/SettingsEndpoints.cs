@@ -25,7 +25,14 @@ public static class SettingsEndpoints
         var registry = app.Services.GetRequiredService<ModuleRegistry>();
         var config = app.Configuration;
 
-        app.MapGet("/", () => Results.Content(SettingsPage.Html, "text/html; charset=utf-8"));
+        app.MapGet("/", (HttpResponse response) =>
+        {
+            // No framing by other sites (clickjacking the Save/Convert buttons), no MIME sniffing.
+            response.Headers.XFrameOptions = "DENY";
+            response.Headers.ContentSecurityPolicy = "frame-ancestors 'none'";
+            response.Headers.XContentTypeOptions = "nosniff";
+            return Results.Content(SettingsPage.Html, "text/html; charset=utf-8");
+        });
 
         var api = app.MapGroup("/api/modules").AddEndpointFilter(async (ctx, next) =>
             IsSameOriginLoopback(ctx.HttpContext.Request) ? await next(ctx) : Results.StatusCode(StatusCodes.Status403Forbidden));
@@ -219,10 +226,7 @@ public static class SettingsEndpoints
             return false;
         }
 
-        var host = request.Host.Host;
-        var loopback = host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-            || (IPAddress.TryParse(host.Trim('[', ']'), out var ip) && IPAddress.IsLoopback(ip));
-        if (!loopback)
+        if (!Security.LocalHosting.IsLoopbackHost(request.Host.Host))
         {
             return false;
         }
