@@ -93,9 +93,11 @@ public class LocalFilesTests
 
         try
         {
-            Assert.Equal(Path.Combine(root, ".secret", "id_ed25519"), PathGuard.Resolve(Path.Combine(linked, "id_ed25519")));
-            Assert.Equal(Path.Combine(root, ".secret", "new", "file.md"), PathGuard.Resolve(Path.Combine(linked, "new", "file.md")));
-            Assert.Equal(Path.Combine(root, "plain.txt"), PathGuard.Resolve(Path.Combine(root, "plain.txt")));
+            // The temp folder may itself be behind a link (macOS: /var → /private/var).
+            var real = PathGuard.Resolve(root);
+            Assert.Equal(Path.Combine(real, ".secret", "id_ed25519"), PathGuard.Resolve(Path.Combine(linked, "id_ed25519")));
+            Assert.Equal(Path.Combine(real, ".secret", "new", "file.md"), PathGuard.Resolve(Path.Combine(linked, "new", "file.md")));
+            Assert.Equal(Path.Combine(real, "plain.txt"), PathGuard.Resolve(Path.Combine(root, "plain.txt")));
         }
         finally
         {
