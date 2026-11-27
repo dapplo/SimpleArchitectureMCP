@@ -37,6 +37,21 @@ public static class SettingsEndpoints
         var api = app.MapGroup("/api/modules").AddEndpointFilter(async (ctx, next) =>
             IsSameOriginLoopback(ctx.HttpContext.Request) ? await next(ctx) : Results.StatusCode(StatusCodes.Status403Forbidden));
 
+        // Ready-made client configs ("MCP clients" tab) with this instance's URL, binary path and tool scope.
+        app.MapGroup("/api/clients").AddEndpointFilter(async (ctx, next) =>
+                IsSameOriginLoopback(ctx.HttpContext.Request) ? await next(ctx) : Results.StatusCode(StatusCodes.Status403Forbidden))
+            .MapGet("/", (string? transport, string? tools) =>
+            {
+                if (!ClientConfigs.IsValidTools(tools))
+                {
+                    return Results.BadRequest(new ResultView(false, "Tools: module or tool names, separated by commas."));
+                }
+
+                var ctx = ClientContext.ForThisProcess(Telemetry.DevToolsTelemetry.ServiceName, mcpUrl,
+                    apiKey: !string.IsNullOrWhiteSpace(config["McpAuth:ApiKey"]));
+                return Results.Ok(ClientConfigs.Build(ctx, transport ?? ClientConfigs.Http, tools));
+            });
+
         api.MapGet("/", (IServiceProvider sp) =>
             new ModulesView(mcpUrl, store.FilePath, registry.Modules.Select(m => View(m, config, sp)).ToList()));
 

@@ -23,7 +23,7 @@ public sealed class SettingsStore(string filePath, IConfigurationRoot configurat
     /// <param name="watch">Reload when another process (e.g. a second simple-architecture-mcp instance) changes the file.</param>
     public static string AddTo(ConfigurationManager configuration, bool watch = false)
     {
-        LegacyNames.AddFallback(configuration, configuration);   // DevToolsMcp:* from before the rename
+        LegacyNames.AddFallback(configuration, configuration);   // SimpleArchitectureMcp:* from before the rename
         var custom = configuration["SimpleArchitectureMcp:SettingsFile"] is { Length: > 0 } p ? p : null;
         var path = Path.GetFullPath(custom ?? DefaultPath());
         if (custom is null && LegacyNames.MigrateFolder(Path.GetDirectoryName(path)!) is { } old)
@@ -50,7 +50,7 @@ public sealed class SettingsStore(string filePath, IConfigurationRoot configurat
         }
 
         sources.Insert(index, source);
-        LegacyNames.AddFallback(configuration, configuration);   // a DevToolsMcp section in an old settings file
+        LegacyNames.AddFallback(configuration, configuration);   // a SimpleArchitectureMcp section in an old settings file
         return path;
     }
 

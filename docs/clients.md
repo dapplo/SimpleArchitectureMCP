@@ -1,5 +1,7 @@
 # Connect your client
 
+> **Easiest:** open the settings page (`http://localhost:5180/`) and pick the **MCP clients** tab. Choose your client, HTTP or stdio, and optionally which tools it gets; the page shows the finished config with this machine's real port and binary path, a **Download** button, and the exact folder the file goes in. It also tells you when that file exists already, so you merge the entry instead of replacing your other servers. The sections below explain the same configs by hand.
+
 There are two ways to connect a client:
 
 | | **HTTP** (default) | **stdio** (`--stdio`) |
@@ -12,7 +14,7 @@ There are two ways to connect a client:
 
 Every client below supports both, so pick what you prefer. HTTP suits you if you keep simple-architecture-mcp running anyway; stdio means nothing to start by hand.
 
-All examples name the server `simple-architecture-mcp`, the same name the settings page uses in its **Connect your client** snippet.
+All examples name the server `simple-architecture-mcp`, the same name the configs on the settings page's **MCP clients** tab use.
 
 * The client only sees the tools of modules you configured on the settings page (`http://localhost:5180/`).
 * With HTTP, start simple-architecture-mcp first, and **reload the MCP server in your client** after you save new settings so it fetches the new tool list.
@@ -99,6 +101,8 @@ Stdio:
 }
 ```
  Use **MCP: List Servers** to restart the server after you change settings, and pick the tools in Copilot Chat's *agent* mode tool picker.
+
+Skills: VS Code 1.147+ loads the server's workflow skills (see the README's *Skills* section) when `"chat.agentHost.mcpSkills.enabled": true` is in your settings. VS Code asks once before it loads skills from the server; they appear as slash commands such as `/migrate-issues`.
 
 ## GitHub Copilot CLI
 
@@ -304,7 +308,7 @@ Every tool definition is sent to the model on every request, so give each client
 | `http://localhost:5180/mcp/readonly` | Only tools that change nothing (search, get, list) |
 | `http://localhost:5180/mcp/jira+readonly` | Read-only Jira tools |
 
-Module names are `confluence`, `jira`, `github`, `archi` and `migration`; any tool name works too. For stdio, add `--tools jira,github` to the arguments. A call to a tool outside the endpoint's scope is refused.
+Module names are `confluence`, `jira`, `github`, `archi` and `migration`; any tool name works too. Skills follow the tools they need; `-skills` hides them. For stdio, add `--tools jira,github` to the arguments. A call to a tool outside the endpoint's scope is refused.
 
 ## Other clients
 

@@ -21,6 +21,8 @@
 
     <!-- AOT/trim warnings are errors so regressions fail the build -->
     <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2046;IL2057;IL2067;IL2070;IL2072;IL2075;IL2087;IL2091;IL3050;IL3051</WarningsAsErrors>
+    <!-- The MCP Skills extension is experimental in the SDK (ModelContextProtocol.Extensions.Skills). -->
+    <NoWarn>$(NoWarn);MCPEXP005</NoWarn>
   </PropertyGroup>
 
   <!-- osx-x64: Xcode 15/16's ld_classic (the SDK default there) rejects unaligned pointers in
@@ -29,6 +31,11 @@
     <UseLdClassicXCodeLinker>false</UseLdClassicXCodeLinker>
   </PropertyGroup>
 
+  <!-- Workflow skills served over MCP (Core/Skills/ModuleSkills): skills/<name>/<path> inside the single-file binary. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Skills\**\*" LogicalName="skills/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="SimpleArchitectureMcp.Tests" />
     <InternalsVisibleTo Include="SimpleArchitectureMcp.Benchmarks" />
@@ -36,6 +43,7 @@
 
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol.AspNetCore" />
+    <PackageReference Include="ModelContextProtocol.Extensions.Skills" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />

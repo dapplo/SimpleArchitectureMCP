@@ -2,6 +2,7 @@ using SimpleArchitectureMcp.Server.Core.Json;
 using SimpleArchitectureMcp.Server.Core.Modules;
 using SimpleArchitectureMcp.Server.Core.Security;
 using SimpleArchitectureMcp.Server.Core.Settings;
+using SimpleArchitectureMcp.Server.Core.Skills;
 using SimpleArchitectureMcp.Server.Core.Telemetry;
 using SimpleArchitectureMcp.Server.Modules.Archi;
 using SimpleArchitectureMcp.Server.Modules.Confluence;
@@ -70,6 +71,7 @@ mcp.AddJiraModule(builder.Configuration, json.McpOptions);
 mcp.AddGitHubModule(builder.Configuration, json.McpOptions);
 mcp.AddArchiModule(builder.Configuration, json.McpOptions);
 mcp.AddMigrationModule(builder.Configuration, json.McpOptions); // after Jira and GitHub: uses both
+mcp.WithModuleSkills();   // workflow skills (skills/list), each shown only while the tools it needs are
 
 var app = builder.Build();
 
