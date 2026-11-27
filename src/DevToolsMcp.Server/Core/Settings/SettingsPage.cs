@@ -17,7 +17,7 @@ internal static class SettingsPage
 main{max-width:640px;margin:0 auto;padding:24px 16px}h1{font-size:22px;margin:0 0 4px}p.sub{color:var(--muted);margin:0 0 16px}
 section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin-bottom:16px}
 .tabs{display:flex;gap:4px;margin-bottom:-1px;position:relative;overflow-x:auto}
-.tab{display:flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);font-weight:600}
+.tab{display:flex;align-items:center;white-space:nowrap;gap:8px;padding:8px 14px;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);font-weight:600}
 .tab:hover{color:var(--fg)}.tab[aria-selected=true]{background:var(--card);border-color:var(--line);color:var(--fg)}.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 #modules>section{border-top-left-radius:0}#modules .status{margin-bottom:4px}
 h2{font-size:17px;margin:0 0 4px;display:flex;align-items:center;gap:8px}.dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}.dot.on{background:var(--ok)}
@@ -27,7 +27,11 @@ input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-rad
 button{padding:8px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:inherit;cursor:pointer}
 button.ghost{background:transparent;color:var(--accent)}.msg{font-size:13px}.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
 .conv{border-top:1px solid var(--line);margin-top:16px;padding-top:4px}.conv .row{margin-top:4px;flex-wrap:nowrap}.conv select{flex:0 0 auto;width:auto;max-width:45%}.conv input{flex:1;min-width:0}
-code,pre{font:12.5px ui-monospace,Menlo,Consolas,monospace}pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;overflow:auto}
+code,pre{font:12.5px ui-monospace,Menlo,Consolas,monospace}pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;overflow:auto;margin:8px 0 0;max-height:260px;white-space:pre-wrap;overflow-wrap:anywhere}
+.pick{display:flex;gap:8px}.pick select{flex:1;min-width:0}.scope{display:flex;gap:4px 14px;flex-wrap:wrap}
+.scope label{display:flex;align-items:center;gap:5px;font-weight:400;font-size:13px;margin:0}.scope input{width:auto;margin:0}
+ul.where{margin:4px 0 0;padding-left:18px;font-size:13px}ul.where code{word-break:break-all}.badge{color:var(--muted);font-size:12px}
+p.foot{color:var(--muted);font-size:12px;margin:8px 0 0}
 </style>
 </head>
 <body>
@@ -36,9 +40,7 @@ code,pre{font:12.5px ui-monospace,Menlo,Consolas,monospace}pre{background:var(--
 <p class="sub">Local MCP server. Tools of unconfigured modules are hidden, so they cost no tokens.</p>
 <div class="tabs" role="tablist" id="tabs" aria-label="Providers"></div>
 <div id="modules"></div>
-<section><h2>Connect your client</h2>
-<p class="status">VS Code / GitHub Copilot <code>.vscode/mcp.json</code> (reload the MCP server after changing settings):</p>
-<pre id="client"></pre><p class="help" id="file"></p></section>
+<p class="foot" id="file"></p>
 </main>
 <script>
 const $=(t,a={},...c)=>{const e=document.createElement(t);for(const[k,v]of Object.entries(a))k in e?e[k]=v:e.setAttribute(k,v);e.append(...c);return e};
@@ -94,6 +96,47 @@ function render(m){
   test.onclick=()=>runTest(sec,'');
   return sec;
 }
+async function copy(text,msg){try{await navigator.clipboard.writeText(text);msg.className='msg ok';msg.textContent='Copied'}catch{msg.className='msg bad';msg.textContent='Copy failed: select the text instead'}}
+function clientsPanel(info){
+  const pick=$('select',{'aria-label':'Client'}),mode=$('select',{'aria-label':'Connection'});
+  mode.append($('option',{value:'http'},'HTTP: use this running server'),$('option',{value:'stdio'},'stdio: the client starts the server'));
+  const active=info.modules.filter(m=>m.active),scope=$('div',{className:'scope'});
+  for(const m of active)scope.append($('label',{},$('input',{type:'checkbox',value:m.name}),m.title));
+  if(active.length)scope.append($('label',{title:'Only tools that change nothing'},$('input',{type:'checkbox',value:'readonly'}),'Read-only'));
+  const out=$('div'),sec=$('section',{id:'panel-clients',role:'tabpanel','aria-labelledby':'tab-clients'},
+    $('p',{className:'status'},'Download a config for your MCP client, made for this server ('+info.mcpUrl+').'),
+    $('div',{className:'pick'},pick,mode));
+  if(active.length)sec.append($('label',{},'Only these tools (none = all configured; fewer tools, fewer tokens)'),scope);
+  sec.append(out);
+  let data;
+  const show=()=>{const c=data.clients.find(x=>x.key===pick.value)||data.clients[0],msg=$('span',{className:'msg'});
+    const parts=[];
+    if(c.transport!==mode.value)parts.push($('p',{className:'help'},c.title+' supports '+c.transport+' only, so this config uses '+c.transport+'.'));
+    if(c.locations.length){
+      const list=$('ul',{className:'where'});
+      for(const l of c.locations){const cp=$('button',{type:'button',className:'ghost',style:'padding:0 6px;font-size:12px'},'Copy path');cp.onclick=()=>copy(l.path,msg);
+        list.append($('li',{},l.label+': ',$('code',{},l.path),' ',cp,l.exists?$('span',{className:'badge'},' exists: add the entry under '+c.mergeInto+' instead of replacing the file'):''))}
+      parts.push($('label',{},'Save as ',$('code',{},c.fileName),' in one of'),list);
+    }
+    const dl=$('button',{type:'button'},'Download '+c.fileName),cpy=$('button',{type:'button',className:'ghost'},'Copy');
+    dl.onclick=()=>{const a=$('a',{href:URL.createObjectURL(new Blob([c.content],{type:'application/octet-stream'})),download:c.fileName});
+      document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);msg.className='msg ok';
+      msg.textContent=c.locations.length?'Saved to your downloads; move it to the path above'+(c.fileName.startsWith('.')?' and name it '+c.fileName:'')+'.':'Saved to your downloads.'};
+    cpy.onclick=()=>copy(c.content,msg);
+    parts.push($('pre',{},c.content),$('div',{className:'row',style:'margin-top:8px'},dl,cpy,msg),$('p',{className:'help'},c.steps));
+    if(c.command){const cc=$('button',{type:'button',className:'ghost'},'Copy');cc.onclick=()=>copy(c.command,msg);
+      parts.push($('label',{},'Or run'),$('div',{className:'pick'},$('pre',{style:'flex:1;margin:0'},c.command),cc))}
+    out.replaceChildren(...parts)};
+  const load=async()=>{const tools=[...scope.querySelectorAll('input:checked')].map(x=>x.value);
+    const r=await call('GET','/api/clients/?transport='+mode.value+'&tools='+encodeURIComponent(tools.join(',')));
+    if(!r.ok){out.replaceChildren($('p',{className:'msg bad'},r.data.message||'Failed'));return}
+    data=r.data;if(!pick.options.length){for(const c of data.clients)pick.append($('option',{value:c.key},c.title));
+      let last;try{last=sessionStorage.getItem('mcpClient')}catch{}if(last&&data.clients.some(c=>c.key===last))pick.value=last}
+    show()};
+  pick.onchange=()=>{try{sessionStorage.setItem('mcpClient',pick.value)}catch{}show()};mode.onchange=load;scope.onchange=load;
+  load();
+  return sec;
+}
 const tabs={};
 function select(name,focus){
   for(const[n,t]of Object.entries(tabs)){const on=n===name;t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
@@ -102,8 +145,8 @@ function select(name,focus){
 }
 function tab(m){
   const dot=$('span',{className:'dot'});
-  const t=$('button',{type:'button',className:'tab',id:'tab-'+m.name,role:'tab','aria-controls':'panel-'+m.name},dot,m.title);
-  t.mark=v=>{dot.className='dot'+(v.active?' on':'');t.title=v.active?'Configured':'Not configured'};t.mark(m);
+  const t=$('button',{type:'button',className:'tab',id:'tab-'+m.name,role:'tab','aria-controls':'panel-'+m.name},...(m.title?[dot,m.title]:[m.label]));
+  t.mark=v=>{dot.className='dot'+(v.active?' on':'');t.title=v.active?'Configured':'Not configured'};if(m.title)t.mark(m);
   t.onclick=()=>select(m.name);
   t.onkeydown=e=>{const names=Object.keys(tabs),i=names.indexOf(m.name);
     const j=e.key==='ArrowRight'?i+1:e.key==='ArrowLeft'?i-1:e.key==='Home'?0:e.key==='End'?names.length-1:null;
@@ -115,8 +158,8 @@ function tab(m){
   const box=document.getElementById('modules'),bar=document.getElementById('tabs');
   for(const m of r.data.modules){bar.append(tab(m));box.append(render(m))}
   let first;try{first=sessionStorage.getItem('mcpTab')}catch{}
-  if(r.data.modules.length)select(tabs[first]?first:r.data.modules[0].name);
-  document.getElementById('client').textContent=JSON.stringify({servers:{'devtools-mcp':{type:'http',url:r.data.mcpUrl}}},null,2);
+  bar.append(tab({name:'clients',label:'MCP clients'}));box.append(clientsPanel(r.data));
+  select(tabs[first]?first:r.data.modules.length?r.data.modules[0].name:'clients');
   document.getElementById('file').textContent='Settings are stored in '+r.data.settingsFile;
 })();
 </script>
