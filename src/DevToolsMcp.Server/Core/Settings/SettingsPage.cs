@@ -17,7 +17,7 @@ internal static class SettingsPage
 main{max-width:640px;margin:0 auto;padding:24px 16px}h1{font-size:22px;margin:0 0 4px}p.sub{color:var(--muted);margin:0 0 16px}
 section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin-bottom:16px}
 .tabs{display:flex;gap:4px;margin-bottom:-1px;position:relative;overflow-x:auto}
-.tab{display:flex;align-items:center;white-space:nowrap;gap:8px;padding:8px 14px;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);font-weight:600}
+.tab{display:flex;align-items:center;white-space:nowrap;gap:7px;padding:8px 11px;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);font-weight:600}
 .tab:hover{color:var(--fg)}.tab[aria-selected=true]{background:var(--card);border-color:var(--line);color:var(--fg)}.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 #modules>section{border-top-left-radius:0}#modules .status{margin-bottom:4px}
 h2{font-size:17px;margin:0 0 4px;display:flex;align-items:center;gap:8px}.dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}.dot.on{background:var(--ok)}
