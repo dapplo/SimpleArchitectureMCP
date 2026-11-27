@@ -2,6 +2,7 @@
   <ItemGroup>
     <!-- MCP -->
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
+    <PackageVersion Include="ModelContextProtocol.Extensions.Skills" Version="2.4.0" />
     <!-- Resilience -->
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="11.0.1" />
     <!-- OpenTelemetry -->

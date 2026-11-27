@@ -102,6 +102,8 @@ Stdio:
 ```
  Use **MCP: List Servers** to restart the server after you change settings, and pick the tools in Copilot Chat's *agent* mode tool picker.
 
+Skills: VS Code 1.147+ loads the server's workflow skills (see the README's *Skills* section) when `"chat.agentHost.mcpSkills.enabled": true` is in your settings. VS Code asks once before it loads skills from the server; they appear as slash commands such as `/migrate-issues`.
+
 ## GitHub Copilot CLI
 
 `~/.copilot/mcp-config.json` (or `$COPILOT_HOME/mcp-config.json`):
@@ -306,7 +308,7 @@ Every tool definition is sent to the model on every request, so give each client
 | `http://localhost:5180/mcp/readonly` | Only tools that change nothing (search, get, list) |
 | `http://localhost:5180/mcp/jira+readonly` | Read-only Jira tools |
 
-Module names are `confluence`, `jira`, `github`, `archi` and `migration`; any tool name works too. For stdio, add `--tools jira,github` to the arguments. A call to a tool outside the endpoint's scope is refused.
+Module names are `confluence`, `jira`, `github`, `archi` and `migration`; any tool name works too. Skills follow the tools they need; `-skills` hides them. For stdio, add `--tools jira,github` to the arguments. A call to a tool outside the endpoint's scope is refused.
 
 ## Other clients
 
