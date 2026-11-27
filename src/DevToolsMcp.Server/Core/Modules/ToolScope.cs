@@ -8,7 +8,7 @@ namespace DevToolsMcp.Server.Core.Modules;
 /// <c>-name</c> to hide one, and <c>readonly</c> for read-only tools only. No names to show means all tools.
 /// Examples: <c>jira,github</c>, <c>confluence,-confluence_export_page</c>, <c>readonly</c>.
 /// It comes from the endpoint path (<c>/mcp/jira,github</c>), otherwise from <c>DevToolsMcp:Tools</c>
-/// (<c>--tools jira,github</c> for stdio).
+/// (<c>--tools jira,github</c> for stdio). Skills follow the tools they need; <c>-skills</c> hides them all.
 /// </summary>
 public sealed class ToolScope
 {
@@ -71,6 +71,11 @@ public sealed class ToolScope
 
         return Parse(services.GetService<IConfiguration>()?[ConfigKey]);
     }
+
+    /// <summary>False when the scope hides all skills (<c>-skills</c>).</summary>
+    public bool AllowsSkills => !_exclude.Contains(SkillsKey);
+
+    public const string SkillsKey = "skills";
 
     public bool Allows(Tool tool, ModuleRegistry registry) =>
         Allows(tool.Name, tool.Annotations?.ReadOnlyHint == true, registry);

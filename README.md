@@ -24,6 +24,7 @@ See [docs/token-savings.md](docs/token-savings.md) for what this brings, why it 
 | --- | --- |
 | Tools of unconfigured modules are **hidden from `tools/list`** | Unused integrations add zero schema tokens |
 | Terse tool descriptions, primitive parameters | All 8 Confluence tool schemas total ≈ 3.2 KB (~790 tokens); the 7 Jira tools ≈ 2.8 KB (~700 tokens); the 6 GitHub tools ≈ 2.7 KB (~670 tokens); the 3 Archi tools ≈ 3.5 KB (~880 tokens); `migrate_issues` ≈ 0.8 KB (~200 tokens) |
+| Workflow **skills over MCP** (`skills/list`), shown only while the tools they drive are | A client loads a skill's name and description up front and its instructions only when it uses it (see [Skills](#skills)) |
 | Per-client tool scopes | `/mcp/jira,github`, `/mcp/readonly`, `--tools jira` (stdio): a client sees only the tools it needs |
 | Jira issues are returned as front matter + **Markdown**, with only the fields that matter | No custom fields, avatars, `self` links or changelog |
 | Pages are returned as **Markdown**, not storage XHTML | Usually several times smaller than the raw body |
@@ -71,9 +72,11 @@ src/
       Json/                      DevToolsJson: combines module JsonSerializerContexts (TypeInfoResolverChain)
       Markdown/                  Shared Markdown parser (AST) used by provider emitters
       Modules/                   ModuleRegistry (enabled/disabled modules, /health)
+      Skills/                    ModuleSkills: serves Skills/ over the MCP Skills extension
       Tools/                     ToolErrors: one error policy for every tool (short messages, no stack traces)
       Security/                  Loopback-only Kestrel binding, optional API key
       Telemetry/                 OpenTelemetry setup, custom metrics
+    Skills/<name>/SKILL.md       Built-in workflow skills (embedded in the binary)
     Modules/Confluence/          The Confluence vertical slice
       ConfluenceModule.cs        AddConfluenceModule(): conditional registration
       ConfluenceOptions.cs       Options, deployment auto-detection, auth
@@ -293,6 +296,22 @@ Renders ArchiMate views to PNG with your local [Archi](https://www.archimatetool
 | `Archi:TimeoutSeconds` | Per Archi run (default 120) |
 
 The settings page shows the first three; scale, margin and timeout are set in `appsettings.json` or environment variables.
+
+## Skills
+
+Besides tools, the server offers a few workflow skills over the [MCP Skills extension](https://modelcontextprotocol.io/seps/2640-skills-extension) (`skills/list`, files through `resources/read`). Tools do the work; a skill tells the agent the safe order to use them in. A client loads only each skill's name and description until the agent uses one, so an unused skill costs about one line of context.
+
+| Skill | For | Shown while these tools are |
+| --- | --- | --- |
+| `migrate-issues` | Jira ↔ GitHub migration: dry run, small batch, check, resume with the cursor | `migrate_issues` |
+| `confluence-writing` | Where pages go, the Markdown and macro syntax that converts cleanly, append vs. update | `confluence_create_page`, `confluence_update_page` |
+| `archi-to-confluence` | ArchiMate views as editable draw.io diagrams on a page, updated in place | `archi_to_drawio`, `confluence_add_drawio` |
+
+A skill follows the endpoint's scope: `/mcp/jira` or `/mcp/readonly` doesn't list `confluence-writing`, because its tools aren't there. `-skills` in a scope (`/mcp/jira,-skills`, `--tools -skills`) hides all skills.
+
+Client support: VS Code 1.147+ with `chat.agentHost.mcpSkills.enabled`; skills then show up as slash commands. Clients without the extension ignore it.
+
+To add a skill, create `src/DevToolsMcp.Server/Skills/<name>/SKILL.md` with `name`, `description` and `metadata.requires` (space-separated tool names) in its front matter. Files next to it are served too. Keep it short: it is read into the context when used.
 
 ## Configuration
 

@@ -2,6 +2,7 @@ using DevToolsMcp.Server.Core.Json;
 using DevToolsMcp.Server.Core.Modules;
 using DevToolsMcp.Server.Core.Security;
 using DevToolsMcp.Server.Core.Settings;
+using DevToolsMcp.Server.Core.Skills;
 using DevToolsMcp.Server.Core.Telemetry;
 using DevToolsMcp.Server.Modules.Archi;
 using DevToolsMcp.Server.Modules.Confluence;
@@ -70,6 +71,7 @@ mcp.AddJiraModule(builder.Configuration, json.McpOptions);
 mcp.AddGitHubModule(builder.Configuration, json.McpOptions);
 mcp.AddArchiModule(builder.Configuration, json.McpOptions);
 mcp.AddMigrationModule(builder.Configuration, json.McpOptions); // after Jira and GitHub: uses both
+mcp.WithModuleSkills();   // workflow skills (skills/list), each shown only while the tools it needs are
 
 var app = builder.Build();
 
