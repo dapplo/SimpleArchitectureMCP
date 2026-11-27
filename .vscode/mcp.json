@@ -1,17 +1,17 @@
 {
   "servers": {
-    "devtools-mcp": {
+    "simple-architecture-mcp": {
       "type": "http",
       "url": "http://localhost:5180/mcp"
       // If McpAuth__ApiKey is set on the server:
-      // "headers": { "Authorization": "Bearer ${input:devtools-mcp-key}" }
+      // "headers": { "Authorization": "Bearer ${input:simple-architecture-mcp-key}" }
     }
   },
   "inputs": [
     {
-      "id": "devtools-mcp-key",
+      "id": "simple-architecture-mcp-key",
       "type": "promptString",
-      "description": "devtools-mcp API key (only if McpAuth__ApiKey is set)",
+      "description": "simple-architecture-mcp API key (only if McpAuth__ApiKey is set)",
       "password": true
     }
   ]

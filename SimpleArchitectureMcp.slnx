@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SimpleArchitectureMcp.AppHost/SimpleArchitectureMcp.AppHost.csproj" />
+    <Project Path="src/SimpleArchitectureMcp.Server/SimpleArchitectureMcp.Server.csproj" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/SimpleArchitectureMcp.Benchmarks/SimpleArchitectureMcp.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SimpleArchitectureMcp.Tests/SimpleArchitectureMcp.Tests.csproj" />
+  </Folder>
+</Solution>

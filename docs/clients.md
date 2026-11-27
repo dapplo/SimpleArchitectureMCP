@@ -6,19 +6,19 @@ There are two ways to connect a client:
 
 | | **HTTP** (default) | **stdio** (`--stdio`) |
 | --- | --- | --- |
-| Who starts devtools-mcp | You (double-click, autostart, Aspire) | The client, whenever it needs it |
-| Address | `http://localhost:5180/mcp` | `<path>/devtools-mcp --stdio` |
+| Who starts simple-architecture-mcp | You (double-click, autostart, Aspire) | The client, whenever it needs it |
+| Address | `http://localhost:5180/mcp` | `<path>/simple-architecture-mcp --stdio` |
 | Several clients at once | Share one running instance | Each client starts its own process |
 | New tools after a settings change | Reload the MCP server in the client | Announced to the client automatically (`tools/list_changed`), where the client supports it |
 | API key | Optional (`McpAuth:ApiKey`) | Not needed: nothing listens for MCP on the network |
 
-Every client below supports both, so pick what you prefer. HTTP suits you if you keep devtools-mcp running anyway; stdio means nothing to start by hand.
+Every client below supports both, so pick what you prefer. HTTP suits you if you keep simple-architecture-mcp running anyway; stdio means nothing to start by hand.
 
-All examples name the server `devtools-mcp`, the same name the configs on the settings page's **MCP clients** tab use.
+All examples name the server `simple-architecture-mcp`, the same name the configs on the settings page's **MCP clients** tab use.
 
 * The client only sees the tools of modules you configured on the settings page (`http://localhost:5180/`).
-* With HTTP, start devtools-mcp first, and **reload the MCP server in your client** after you save new settings so it fetches the new tool list.
-* The port is 5180 unless you set `DevToolsMcp:Port` or `PORT`. Change the URL accordingly.
+* With HTTP, start simple-architecture-mcp first, and **reload the MCP server in your client** after you save new settings so it fetches the new tool list.
+* The port is 5180 unless you set `SimpleArchitectureMcp:Port` or `PORT`. Change the URL accordingly.
 
 | Client | Config |
 | --- | --- |
@@ -36,18 +36,18 @@ All examples name the server `devtools-mcp`, the same name the configs on the se
 
 Start the binary with `--stdio` and the client talks MCP to it over stdin/stdout. Use the **full path** to the binary you extracted from the release, for example:
 
-* Windows: `C:\Tools\devtools-mcp\devtools-mcp.exe`, written `C:\\Tools\\devtools-mcp\\devtools-mcp.exe` inside JSON
-* macOS / Linux: `/Users/me/tools/devtools-mcp/devtools-mcp` or `/home/me/tools/devtools-mcp/devtools-mcp`
+* Windows: `C:\Tools\simple-architecture-mcp\simple-architecture-mcp.exe`, written `C:\\Tools\\simple-architecture-mcp\\simple-architecture-mcp.exe` inside JSON
+* macOS / Linux: `/Users/me/tools/simple-architecture-mcp/simple-architecture-mcp` or `/home/me/tools/simple-architecture-mcp/simple-architecture-mcp`
 
 What changes, and what stays the same:
 
 * **Settings** come from the same per-user `settings.json`, environment variables and `appsettings.json` as in HTTP mode, so a module you configured once works in both modes.
 * **The settings page** stays available at `http://localhost:5180/`. On first start, when nothing is configured yet, it still opens in your browser. Save there and the tools appear in the client without a restart.
-* **Already running?** If another devtools-mcp (HTTP or stdio) holds port 5180, the stdio instance still serves its client, and you edit settings on the page of the instance that runs already. The stdio instance watches `settings.json` and picks the change up.
+* **Already running?** If another simple-architecture-mcp (HTTP or stdio) holds port 5180, the stdio instance still serves its client, and you edit settings on the page of the instance that runs already. The stdio instance watches `settings.json` and picks the change up.
 * **Logs** go to stderr, which most clients show in their MCP log/output panel. stdout carries only MCP messages.
 * **Lifetime**: the process ends when the client closes the connection.
 
-Examples below use `/path/to/devtools-mcp`; replace it with your path.
+Examples below use `/path/to/simple-architecture-mcp`; replace it with your path.
 
 ## With an API key
 
@@ -58,7 +58,7 @@ Authorization: Bearer <key>
 X-API-Key: <key>
 ```
 
-This applies to HTTP only; stdio mode never needs a key. Each section below shows where the header goes. Keep the key out of files you commit: use the client's input prompt or an environment variable (`DEVTOOLS_MCP_KEY` in the examples).
+This applies to HTTP only; stdio mode never needs a key. Each section below shows where the header goes. Keep the key out of files you commit: use the client's input prompt or an environment variable (`SIMPLE_ARCHITECTURE_MCP_KEY` in the examples).
 
 ## VS Code / GitHub Copilot
 
@@ -67,7 +67,7 @@ This repository already contains [`.vscode/mcp.json`](../.vscode/mcp.json). For 
 ```jsonc
 {
   "servers": {
-    "devtools-mcp": { "type": "http", "url": "http://localhost:5180/mcp" }
+    "simple-architecture-mcp": { "type": "http", "url": "http://localhost:5180/mcp" }
   }
 }
 ```
@@ -77,26 +77,26 @@ With an API key, VS Code prompts for it once and stores it securely:
 ```jsonc
 {
   "servers": {
-    "devtools-mcp": {
+    "simple-architecture-mcp": {
       "type": "http",
       "url": "http://localhost:5180/mcp",
-      "headers": { "Authorization": "Bearer ${input:devtools-mcp-key}" }
+      "headers": { "Authorization": "Bearer ${input:simple-architecture-mcp-key}" }
     }
   },
   "inputs": [
-    { "id": "devtools-mcp-key", "type": "promptString", "description": "devtools-mcp API key", "password": true }
+    { "id": "simple-architecture-mcp-key", "type": "promptString", "description": "simple-architecture-mcp API key", "password": true }
   ]
 }
 ```
 
-`${env:DEVTOOLS_MCP_KEY}` works instead of `${input:…}` if you prefer an environment variable.
+`${env:SIMPLE_ARCHITECTURE_MCP_KEY}` works instead of `${input:…}` if you prefer an environment variable.
 
 Stdio:
 
 ```jsonc
 {
   "servers": {
-    "devtools-mcp": { "type": "stdio", "command": "/path/to/devtools-mcp", "args": ["--stdio"] }
+    "simple-architecture-mcp": { "type": "stdio", "command": "/path/to/simple-architecture-mcp", "args": ["--stdio"] }
   }
 }
 ```
@@ -111,7 +111,7 @@ Skills: VS Code 1.147+ loads the server's workflow skills (see the README's *Ski
 ```json
 {
   "mcpServers": {
-    "devtools-mcp": {
+    "simple-architecture-mcp": {
       "type": "http",
       "url": "http://localhost:5180/mcp",
       "tools": ["*"]
@@ -120,14 +120,14 @@ Skills: VS Code 1.147+ loads the server's workflow skills (see the README's *Ski
 }
 ```
 
-With an API key, add `"headers": { "Authorization": "Bearer ${DEVTOOLS_MCP_KEY}" }`.
+With an API key, add `"headers": { "Authorization": "Bearer ${SIMPLE_ARCHITECTURE_MCP_KEY}" }`.
 
-Stdio: `{ "type": "local", "command": "/path/to/devtools-mcp", "args": ["--stdio"], "tools": ["*"] }` as the `devtools-mcp` entry.
+Stdio: `{ "type": "local", "command": "/path/to/simple-architecture-mcp", "args": ["--stdio"], "tools": ["*"] }` as the `simple-architecture-mcp` entry.
 
 ## Claude Code
 
 ```bash
-claude mcp add --transport http --scope user devtools-mcp http://localhost:5180/mcp
+claude mcp add --transport http --scope user simple-architecture-mcp http://localhost:5180/mcp
 ```
 
 * `--scope user` makes it available in all your projects (stored in `~/.claude.json`). Leave it out to add it only for the current project, or use `--scope project` to write a shared `.mcp.json` into the repository.
@@ -139,10 +139,10 @@ A project `.mcp.json` that reads the key from the environment:
 ```json
 {
   "mcpServers": {
-    "devtools-mcp": {
+    "simple-architecture-mcp": {
       "type": "http",
       "url": "http://localhost:5180/mcp",
-      "headers": { "Authorization": "Bearer ${DEVTOOLS_MCP_KEY}" }
+      "headers": { "Authorization": "Bearer ${SIMPLE_ARCHITECTURE_MCP_KEY}" }
     }
   }
 }
@@ -153,7 +153,7 @@ A project `.mcp.json` that reads the key from the environment:
 Stdio (everything after `--` is the command Claude Code runs):
 
 ```bash
-claude mcp add --scope user devtools-mcp -- /path/to/devtools-mcp --stdio
+claude mcp add --scope user simple-architecture-mcp -- /path/to/simple-architecture-mcp --stdio
 ```
 
 ## Claude Desktop
@@ -166,25 +166,25 @@ Claude Desktop starts local MCP servers over stdio from `claude_desktop_config.j
 ```json
 {
   "mcpServers": {
-    "devtools-mcp": {
-      "command": "/path/to/devtools-mcp",
+    "simple-architecture-mcp": {
+      "command": "/path/to/simple-architecture-mcp",
       "args": ["--stdio"]
     }
   }
 }
 ```
 
-On Windows: `"command": "C:\\Tools\\devtools-mcp\\devtools-mcp.exe"`. Restart Claude Desktop after editing the file.
+On Windows: `"command": "C:\\Tools\\simple-architecture-mcp\\simple-architecture-mcp.exe"`. Restart Claude Desktop after editing the file.
 
 <details>
 <summary>Alternative: share a running HTTP instance through <code>mcp-remote</code></summary>
 
-If you keep devtools-mcp running in HTTP mode and want Claude Desktop to use that same instance, the [`mcp-remote`](https://github.com/geelen/mcp-remote) bridge (needs [Node.js](https://nodejs.org)) translates between stdio and HTTP:
+If you keep simple-architecture-mcp running in HTTP mode and want Claude Desktop to use that same instance, the [`mcp-remote`](https://github.com/geelen/mcp-remote) bridge (needs [Node.js](https://nodejs.org)) translates between stdio and HTTP:
 
 ```json
 {
   "mcpServers": {
-    "devtools-mcp": {
+    "simple-architecture-mcp": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "http://localhost:5180/mcp", "--allow-http",
                "--header", "Authorization:${AUTH_HEADER}"],
@@ -205,7 +205,7 @@ Leave out the `--header` pair and `env` if you don't use an API key. `--allow-ht
 ```json
 {
   "mcpServers": {
-    "devtools-mcp": { "url": "http://localhost:5180/mcp" }
+    "simple-architecture-mcp": { "url": "http://localhost:5180/mcp" }
   }
 }
 ```
@@ -215,15 +215,15 @@ With an API key from the environment:
 ```json
 {
   "mcpServers": {
-    "devtools-mcp": {
+    "simple-architecture-mcp": {
       "url": "http://localhost:5180/mcp",
-      "headers": { "Authorization": "Bearer ${env:DEVTOOLS_MCP_KEY}" }
+      "headers": { "Authorization": "Bearer ${env:SIMPLE_ARCHITECTURE_MCP_KEY}" }
     }
   }
 }
 ```
 
-Stdio: `"devtools-mcp": { "command": "/path/to/devtools-mcp", "args": ["--stdio"] }`.
+Stdio: `"simple-architecture-mcp": { "command": "/path/to/simple-architecture-mcp", "args": ["--stdio"] }`.
 
 Toggle or refresh the server under Cursor Settings → MCP.
 
@@ -234,14 +234,14 @@ Toggle or refresh the server under Cursor Settings → MCP.
 ```json
 {
   "mcpServers": {
-    "devtools-mcp": { "serverUrl": "http://localhost:5180/mcp" }
+    "simple-architecture-mcp": { "serverUrl": "http://localhost:5180/mcp" }
   }
 }
 ```
 
-With an API key: add `"headers": { "Authorization": "Bearer ${env:DEVTOOLS_MCP_KEY}" }`. Press refresh in the MCP panel after changes.
+With an API key: add `"headers": { "Authorization": "Bearer ${env:SIMPLE_ARCHITECTURE_MCP_KEY}" }`. Press refresh in the MCP panel after changes.
 
-Stdio: `"devtools-mcp": { "command": "/path/to/devtools-mcp", "args": ["--stdio"] }`.
+Stdio: `"simple-architecture-mcp": { "command": "/path/to/simple-architecture-mcp", "args": ["--stdio"] }`.
 
 ## JetBrains AI Assistant and Junie
 
@@ -250,7 +250,7 @@ Settings → Tools → AI Assistant → Model Context Protocol (MCP) → **Add**
 ```json
 {
   "mcpServers": {
-    "devtools-mcp": { "url": "http://localhost:5180/mcp" }
+    "simple-architecture-mcp": { "url": "http://localhost:5180/mcp" }
   }
 }
 ```
@@ -260,7 +260,7 @@ JetBrains documents only `url` for HTTP servers, no request headers. If you set 
 ```json
 {
   "mcpServers": {
-    "devtools-mcp": { "command": "/path/to/devtools-mcp", "args": ["--stdio"] }
+    "simple-architecture-mcp": { "command": "/path/to/simple-architecture-mcp", "args": ["--stdio"] }
   }
 }
 ```
@@ -272,29 +272,29 @@ JetBrains' AI Assistant documentation does not cover Junie's own MCP settings. W
 `~/.codex/config.toml` (or `.codex/config.toml` in a trusted project):
 
 ```toml
-[mcp_servers.devtools-mcp]
+[mcp_servers.simple-architecture-mcp]
 url = "http://localhost:5180/mcp"
 ```
 
 With an API key, Codex reads it from an environment variable and sends it as a bearer token:
 
 ```toml
-[mcp_servers.devtools-mcp]
+[mcp_servers.simple-architecture-mcp]
 url = "http://localhost:5180/mcp"
-bearer_token_env_var = "DEVTOOLS_MCP_KEY"
+bearer_token_env_var = "SIMPLE_ARCHITECTURE_MCP_KEY"
 ```
 
-`codex mcp add devtools-mcp --url http://localhost:5180/mcp` writes the first form for you.
+`codex mcp add simple-architecture-mcp --url http://localhost:5180/mcp` writes the first form for you.
 
 Stdio:
 
 ```toml
-[mcp_servers.devtools-mcp]
-command = "/path/to/devtools-mcp"
+[mcp_servers.simple-architecture-mcp]
+command = "/path/to/simple-architecture-mcp"
 args = ["--stdio"]
 ```
 
-or `codex mcp add devtools-mcp -- /path/to/devtools-mcp --stdio`. `/mcp` inside Codex lists the connected servers.
+or `codex mcp add simple-architecture-mcp -- /path/to/simple-architecture-mcp --stdio`. `/mcp` inside Codex lists the connected servers.
 
 ## Only the tools a client needs
 
@@ -302,7 +302,7 @@ Every tool definition is sent to the model on every request, so give each client
 
 | Endpoint | Tools |
 | --- | --- |
-| `http://localhost:5180/mcp` | All configured tools (or the `DevToolsMcp:Tools` default) |
+| `http://localhost:5180/mcp` | All configured tools (or the `SimpleArchitectureMcp:Tools` default) |
 | `http://localhost:5180/mcp/jira,github` | Only the Jira and GitHub modules |
 | `http://localhost:5180/mcp/confluence,-confluence_export_page` | Confluence without one tool |
 | `http://localhost:5180/mcp/readonly` | Only tools that change nothing (search, get, list) |
@@ -313,7 +313,7 @@ Module names are `confluence`, `jira`, `github`, `archi` and `migration`; any to
 ## Other clients
 
 * **Supports Streamable HTTP?** Use `http://localhost:5180/mcp`. Pick "HTTP" or "Streamable HTTP", not the older "SSE" transport.
-* **stdio only?** Use `/path/to/devtools-mcp` as the command with the argument `--stdio`.
+* **stdio only?** Use `/path/to/simple-architecture-mcp` as the command with the argument `--stdio`.
 * **Check that the server is up:** `curl http://localhost:5180/health` returns `{"status":"ok","modules":[…]}` with the active modules. `/health` never needs the API key.
 
 ## Troubleshooting
@@ -323,8 +323,8 @@ Module names are `confluence`, `jira`, `github`, `archi` and `migration`; any to
 | Client shows no tools | No module is configured yet. Open `http://localhost:5180/`, save a module, then reload the MCP server in the client. |
 | Only some providers' tools appear | Tools of unconfigured modules are hidden on purpose (zero schema tokens). Configure the missing module. |
 | `401 Unauthorized` | `McpAuth:ApiKey` is set; add the header shown above. |
-| stdio server fails to start | Use the full path to the binary. If macOS blocks the downloaded binary, open it once with right-click → Open, or run `xattr -d com.apple.quarantine /path/to/devtools-mcp`. Check the client's MCP log for the stderr output. |
-| Connection refused | devtools-mcp isn't running, or runs on another port. A second start exits and leaves the first instance running. |
-| Works on the same machine, not from another one | By design: the server binds to loopback. `DevToolsMcp:AllowRemote=true` changes that and requires `McpAuth:ApiKey`; without a key the server refuses to start. |
+| stdio server fails to start | Use the full path to the binary. If macOS blocks the downloaded binary, open it once with right-click → Open, or run `xattr -d com.apple.quarantine /path/to/simple-architecture-mcp`. Check the client's MCP log for the stderr output. |
+| Connection refused | simple-architecture-mcp isn't running, or runs on another port. A second start exits and leaves the first instance running. |
+| Works on the same machine, not from another one | By design: the server binds to loopback. `SimpleArchitectureMcp:AllowRemote=true` changes that and requires `McpAuth:ApiKey`; without a key the server refuses to start. |
 
 Next: [example prompts and workflows](examples.md).
