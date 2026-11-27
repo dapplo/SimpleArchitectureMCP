@@ -12,6 +12,10 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <IsAotCompatible>true</IsAotCompatible>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
+    <!-- Source-generate minimal API endpoints even when PublishAot is off. The SDK only turns the
+         Request Delegate Generator on together with PublishAot, so a -p:PublishAot=false publish would
+         fall back to the reflection-based MapGet/MapPost overloads and fail on IL2026/IL3050. -->
+    <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
 
     <!-- Lean binary -->
@@ -23,6 +27,13 @@
     <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2046;IL2057;IL2067;IL2070;IL2072;IL2075;IL2087;IL2091;IL3050;IL3051</WarningsAsErrors>
     <!-- The MCP Skills extension is experimental in the SDK (ModelContextProtocol.Extensions.Skills). -->
     <NoWarn>$(NoWarn);MCPEXP005</NoWarn>
+  </PropertyGroup>
+
+  <!-- Fallback when the native toolchain is missing (e.g. Windows without the "Desktop development with C++"
+       workload): publish with -p:PublishAot=false to get a trimmed, self-contained single-file executable
+       running on the regular JIT runtime instead. -->
+  <PropertyGroup Condition="'$(PublishAot)' != 'true'">
+    <PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
 
   <!-- osx-x64: Xcode 15/16's ld_classic (the SDK default there) rejects unaligned pointers in
