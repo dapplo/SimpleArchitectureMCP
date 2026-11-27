@@ -1,5 +1,7 @@
 # Connect your client
 
+> **Easiest:** open the settings page (`http://localhost:5180/`) and pick the **MCP clients** tab. Choose your client, HTTP or stdio, and optionally which tools it gets; the page shows the finished config with this machine's real port and binary path, a **Download** button, and the exact folder the file goes in. It also tells you when that file exists already, so you merge the entry instead of replacing your other servers. The sections below explain the same configs by hand.
+
 There are two ways to connect a client:
 
 | | **HTTP** (default) | **stdio** (`--stdio`) |
@@ -12,7 +14,7 @@ There are two ways to connect a client:
 
 Every client below supports both, so pick what you prefer. HTTP suits you if you keep devtools-mcp running anyway; stdio means nothing to start by hand.
 
-All examples name the server `devtools-mcp`, the same name the settings page uses in its **Connect your client** snippet.
+All examples name the server `devtools-mcp`, the same name the configs on the settings page's **MCP clients** tab use.
 
 * The client only sees the tools of modules you configured on the settings page (`http://localhost:5180/`).
 * With HTTP, start devtools-mcp first, and **reload the MCP server in your client** after you save new settings so it fetches the new tool list.
