@@ -354,6 +354,12 @@ dotnet publish src/SimpleArchitectureMcp.Server -c Release -r osx-arm64 -o artif
 
 Native AOT cannot cross-compile between operating systems, so publish each RID on its own OS. Trim/AOT warnings (`IL2026`, `IL3050`, …) are configured as errors, so any reflection regression fails the build.
 
+**Without the native toolchain** (for example Windows without the C++ workload, where the AOT publish stops because `vswhere` finds no `VC.Tools`), add `-p:PublishAot=false`. You still get a single-file, self-contained executable in the same folder, only trimmed and running on the regular JIT runtime instead of being compiled to native code. It is a little smaller (~25 MB) but starts slower than the AOT build. Unlike AOT, this build can also be made for another OS (e.g. `win-x64` from Linux):
+
+```bash
+dotnet publish src/SimpleArchitectureMcp.Server -c Release -r win-x64 -o artifacts/publish/win-x64 -p:PublishAot=false
+```
+
 CI (`.github/workflows/build.yml`) builds, tests, publishes and smoke-tests the AOT binary on `linux-x64`, `linux-arm64`, `win-x64`, `osx-arm64` and `osx-x64`. Each run uploads `simple-architecture-mcp-<rid>.tar.gz` / `.zip` as an artifact. Every push to `main` also publishes them as an automatic GitHub **pre-release** (`v0.1.<run>-preview`). Pushing a `v*` tag publishes a regular release.
 
 Run the binary directly:
